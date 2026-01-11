@@ -39,14 +39,17 @@
   <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17.3/dist/browser/index.min.js"></script>
 
   <script>
-    // Confirm libraries loaded
-    console.log("D3 loaded:", typeof d3 !== "undefined");
-    console.log("Markmap object:", window.markmap);
+    // Ensure DOM and libraries are fully loaded before creating the map
+    window.addEventListener("load", () => {
+      if (!window.markmap) {
+        console.error("Markmap not found!");
+        return;
+      }
 
-    const { Markmap, Transformer } = window.markmap;
-    const transformer = new Transformer();
+      const { Markmap, Transformer } = window.markmap;
+      const transformer = new Transformer();
 
-    const md = `
+      const md = `
 # VAT
 ## Animal feed
 - Pet food exceptions
@@ -56,8 +59,9 @@
 - Takeaway vs eat-in
 `;
 
-    const { root } = transformer.transform(md);
-    Markmap.create("#mindmap", { initialExpandLevel: 2 }, root);
+      const { root } = transformer.transform(md);
+      Markmap.create("#mindmap", { initialExpandLevel: 2 }, root);
+    });
   </script>
 </body>
 </html>
