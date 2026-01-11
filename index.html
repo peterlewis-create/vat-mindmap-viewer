@@ -7,260 +7,175 @@
 
   <style>
     :root{
-      --bg0:#07121b;
-      --bg1:#0b1a27;
-      --panel:#0b1620cc;
-      --panel2:#0b1620f0;
-      --text:#e5eef7;
-      --muted:#a9b7c6;
-      --line:rgba(255,255,255,.10);
-      --btn:rgba(255,255,255,.06);
-      --btnH:rgba(255,255,255,.10);
-      --danger:#ff6b6b;
-      --ok:#6ee7b7;
-      --warn:#fbbf24;
+      --bg1:#0b1220;
+      --bg2:#0a1a2c;
+      --panel:rgba(7,12,22,.92);
+      --panel2:rgba(255,255,255,.06);
+      --text:#e5e7eb;
+      --muted:rgba(229,231,235,.75);
+      --border:rgba(255,255,255,.10);
+      --accent:rgba(255,255,255,.12);
     }
-
-    html, body { height: 100%; margin: 0; }
-    body {
-      background: radial-gradient(1200px 700px at 20% 30%, #0d2233 0%, var(--bg0) 55%, #061019 100%);
-      color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      overflow: hidden;
+    html, body { height:100%; margin:0; }
+    body{
+      background: radial-gradient(1200px 700px at 20% 10%, var(--bg2), var(--bg1));
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      overflow:hidden;
     }
 
     .topbar{
-      position: fixed; top: 0; left: 0; right: 0;
-      height: 56px;
-      display: flex; align-items: center; gap: 10px;
-      padding: 0 14px;
-      background: linear-gradient(to bottom, rgba(10,20,30,.90), rgba(10,20,30,.70));
-      border-bottom: 1px solid var(--line);
-      z-index: 50;
-      backdrop-filter: blur(8px);
+      position:fixed; top:0; left:0; right:0;
+      height:52px;
+      display:flex; align-items:center; gap:10px;
+      padding:0 12px;
+      background:var(--panel);
+      border-bottom:1px solid var(--panel2);
+      z-index:10;
     }
-
-    .title{
-      font-weight: 700;
-      letter-spacing: .3px;
-      white-space: nowrap;
+    .title{ font-weight:650; letter-spacing:.2px; opacity:.95; }
+    .pill{
+      font-size:12px;
+      padding:4px 8px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      color:var(--muted);
+      background:rgba(255,255,255,.04);
+      white-space:nowrap;
     }
-
-    .status{
-      font-size: 12px;
-      color: var(--muted);
-      padding: 4px 10px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: rgba(255,255,255,.04);
-      white-space: nowrap;
-    }
-    .status.ok { color: var(--ok); border-color: rgba(110,231,183,.35); }
-    .status.warn { color: var(--warn); border-color: rgba(251,191,36,.35); }
-    .status.bad { color: var(--danger); border-color: rgba(255,107,107,.35); }
-
-    .spacer{ flex: 1; }
+    .spacer{ flex:1; }
 
     .btn{
-      appearance: none;
-      border: 1px solid var(--line);
-      background: var(--btn);
-      color: var(--text);
-      padding: 7px 10px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 13px;
+      appearance:none;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      padding:7px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-size:13px;
     }
-    .btn:hover{ background: var(--btnH); }
-    .btn:active{ transform: translateY(1px); }
+    .btn:hover{ background:rgba(255,255,255,.10); }
+    .btn:active{ transform:translateY(1px); }
 
     .stage{
-      position: fixed;
-      top: 56px; left: 0; right: 0; bottom: 0;
-      display: grid;
-      grid-template-columns: 0px 1fr;
-      transition: grid-template-columns .18s ease;
+      position:absolute;
+      top:52px; left:0; right:0; bottom:0;
     }
-    .stage.sources-open{
-      grid-template-columns: 360px 1fr;
+    /* embed=1 gives true full-screen */
+    body.embed .stage{ top:0; }
+    body.embed .topbar{ display:none; }
+
+    svg{
+      width:100%;
+      height:100%;
+      display:block;
+      /* helps deep trees readability a bit */
+      font-size:14px;
     }
 
-    .sources{
-      height: 100%;
-      border-right: 1px solid var(--line);
-      background: var(--panel);
-      backdrop-filter: blur(10px);
-      overflow: hidden;
+    .side{
+      position:fixed;
+      top:52px; bottom:0; left:0;
+      width:340px;
+      transform:translateX(-102%);
+      transition:transform .2s ease;
+      background:rgba(7,12,22,.94);
+      border-right:1px solid var(--panel2);
+      z-index:9;
+      padding:12px;
+      overflow:auto;
     }
+    body.embed .side{ top:0; }
+    .side.open{ transform:translateX(0); }
+    .side h3{
+      margin:4px 0 10px 0;
+      font-size:14px;
+      letter-spacing:.2px;
+      opacity:.9;
+    }
+    .source{
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.05);
+      border-radius:12px;
+      padding:10px;
+      margin:0 0 10px 0;
+      font-size:13px;
+      line-height:1.35;
+    }
+    .source b{ display:block; margin-bottom:3px; }
 
-    .sources-inner{
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .sources-header{
-      padding: 12px 12px 8px 12px;
-      font-weight: 700;
-      border-bottom: 1px solid var(--line);
-      background: var(--panel2);
-    }
-    .sources-list{
-      padding: 10px 12px 14px 12px;
-      overflow: auto;
-      flex: 1;
-    }
-
-    .src-card{
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.04);
-      border-radius: 12px;
-      padding: 10px 10px;
-      margin-bottom: 10px;
-    }
-    .src-title{
-      font-weight: 700;
-      font-size: 13px;
-      margin-bottom: 4px;
-      line-height: 1.25;
-    }
-    .src-meta{
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.35;
-      word-break: break-word;
-    }
-    .src-link{
-      display: inline-block;
-      margin-top: 6px;
-      font-size: 12px;
-      color: #b7dbff;
-      text-decoration: none;
-      border-bottom: 1px dashed rgba(183,219,255,.35);
-    }
-    .src-link:hover{ opacity: .9; }
-
-    .canvas{
-      position: relative;
-      height: 100%;
-      overflow: hidden;
-    }
-
-    #svg {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    .center-overlay{
-      position: absolute;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 18px;
-      pointer-events: none;
-    }
-
-    .center-overlay.show{ display: flex; }
-
-    .card{
-      pointer-events: auto;
-      max-width: 860px;
-      width: 100%;
-      border: 1px solid var(--line);
-      background: rgba(10,20,30,.65);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 12px 40px rgba(0,0,0,.35);
-    }
-
-    .card h3{
-      margin: 0 0 8px 0;
-      font-size: 14px;
-      letter-spacing: .2px;
-    }
-
-    .card p{
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.45;
-    }
-
-    .mono{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-      color: #d6e2ee;
-      white-space: pre-wrap;
-      word-break: break-word;
-      margin-top: 10px;
-      padding: 10px;
-      border-radius: 12px;
-      background: rgba(0,0,0,.25);
-      border: 1px solid rgba(255,255,255,.08);
-    }
-
-    /* Paste modal */
     .modal{
-      position: absolute;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,.55);
-      backdrop-filter: blur(6px);
-      z-index: 20;
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:20;
     }
-    .modal.show{ display: flex; }
-    .modal-card{
-      width: min(980px, calc(100% - 22px));
-      border: 1px solid var(--line);
-      background: rgba(10,20,30,.90);
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 18px 60px rgba(0,0,0,.45);
+    .modal.open{ display:flex; }
+    .card{
+      width:min(900px, calc(100vw - 28px));
+      height:min(560px, calc(100vh - 28px));
+      background:rgba(10,18,32,.96);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:18px;
+      box-shadow: 0 20px 70px rgba(0,0,0,.55);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
     }
-    .modal-head{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
+    .cardhead{
+      display:flex; align-items:center; gap:10px;
+      padding:12px 12px;
+      border-bottom:1px solid rgba(255,255,255,.10);
     }
-    .modal-head .label{
-      font-weight: 700;
-      font-size: 13px;
-    }
-    .modal-body{
-      padding: 12px;
-    }
+    .cardhead .hint{ color:var(--muted); font-size:12px; }
     textarea{
-      width: 100%;
-      height: min(56vh, 520px);
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.04);
-      color: var(--text);
-      padding: 10px;
+      flex:1;
+      width:100%;
+      resize:none;
+      border:0;
+      outline:none;
+      padding:12px;
+      background:transparent;
+      color:var(--text);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-      line-height: 1.4;
-      resize: vertical;
-      outline: none;
+      font-size:12px;
+      line-height:1.5;
     }
-    .modal-foot{
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-      padding: 10px 12px 12px 12px;
-      border-top: 1px solid var(--line);
+    .cardfoot{
+      display:flex; gap:10px; justify-content:flex-end;
+      padding:12px;
+      border-top:1px solid rgba(255,255,255,.10);
     }
 
-    /* Markmap font sizing for deeper trees */
-    .markmap {
-      font: 12px/1.35 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    .centerNotice{
+      position:absolute;
+      left:50%; top:50%;
+      transform:translate(-50%,-50%);
+      width:min(920px, calc(100vw - 28px));
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255шин,.12);
+      border-radius:18px;
+      padding:14px 16px;
+      color:var(--muted);
+      z-index:5;
+      display:none;
+    }
+    .centerNotice b{ color:var(--text); }
+    .centerNotice code{
+      display:block;
+      margin-top:8px;
+      padding:10px;
+      border-radius:12px;
+      background:rgba(0,0,0,.25);
+      border:1px solid rgba(255,255,255,.10);
+      color:var(--text);
+      overflow:auto;
+      white-space:pre-wrap;
+      word-break:break-word;
+      font-size:12px;
     }
   </style>
 </head>
@@ -268,367 +183,304 @@
 <body>
   <div class="topbar">
     <div class="title">VAT Mindmap</div>
-    <div id="status" class="status">Loading viewer…</div>
+    <div id="status" class="pill">Loading libraries…</div>
     <div class="spacer"></div>
-
-    <button class="btn" id="btnFit">Fit</button>
-    <button class="btn" id="btnSources">Sources</button>
-    <button class="btn" id="btnPaste">Paste</button>
-    <button class="btn" id="btnClear">Clear</button>
+    <button class="btn" id="fitBtn">Fit</button>
+    <button class="btn" id="srcBtn">Sources</button>
+    <button class="btn" id="pasteBtn">Paste</button>
+    <button class="btn" id="clearBtn">Clear</button>
   </div>
 
-  <div id="stage" class="stage">
-    <aside class="sources" aria-label="Verified sources">
-      <div class="sources-inner">
-        <div class="sources-header">Verified sources</div>
-        <div id="sourcesList" class="sources-list"></div>
-      </div>
-    </aside>
+  <div id="side" class="side">
+    <h3>Verified sources</h3>
+    <div id="sourcesList"></div>
+  </div>
 
-    <main class="canvas">
-      <svg id="svg"></svg>
+  <div class="stage">
+    <svg id="mm"></svg>
+    <div id="notice" class="centerNotice"></div>
+  </div>
 
-      <div id="empty" class="center-overlay show">
-        <div class="card">
-          <h3>Waiting for content</h3>
-          <p>
-            Use <b>Paste</b> to paste markdown, or send markdown from your website via <span class="mono">postMessage</span>.
-            Once the viewer receives content, it will render and auto-fit.
-          </p>
-        </div>
+  <div id="modal" class="modal">
+    <div class="card">
+      <div class="cardhead">
+        <div style="font-weight:650;">Paste mindmap markdown</div>
+        <div class="hint">This is only for testing. Your Squarespace page will send the markdown automatically.</div>
+        <div class="spacer"></div>
+        <button class="btn" id="modalCloseTop">Close</button>
       </div>
-
-      <div id="error" class="center-overlay">
-        <div class="card">
-          <h3>Library load failed</h3>
-          <p>
-            The viewer could not load D3 / Markmap from the CDN. This is usually caused by a network/content blocker, or a CDN being blocked.
-            Try again, or switch networks. Details are shown below.
-          </p>
-          <div id="errorDetails" class="mono"></div>
-        </div>
+      <textarea id="mdInput" spellcheck="false"></textarea>
+      <div class="cardfoot">
+        <button class="btn" id="modalClose">Cancel</button>
+        <button class="btn" id="modalApply">Apply</button>
       </div>
-
-      <div id="pasteModal" class="modal" role="dialog" aria-modal="true">
-        <div class="modal-card">
-          <div class="modal-head">
-            <div class="label">Paste Markdown (Markmap)</div>
-            <button class="btn" id="btnPasteClose">Close</button>
-          </div>
-          <div class="modal-body">
-            <textarea id="pasteText" placeholder="# VAT&#10;## Animal feed&#10;### Pet food exceptions&#10;..."></textarea>
-          </div>
-          <div class="modal-foot">
-            <button class="btn" id="btnPasteCancel">Cancel</button>
-            <button class="btn" id="btnPasteApply">Render</button>
-          </div>
-        </div>
-      </div>
-    </main>
+    </div>
   </div>
 
   <script>
-    // ------------------------------------------------------------
-    // Robust script loader: jsDelivr first, then unpkg fallback.
-    // ------------------------------------------------------------
-    const CDN = {
-      d3: [
-        "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js",
-        "https://unpkg.com/d3@7/dist/d3.min.js"
-      ],
-      markmapLib: [
-        "https://cdn.jsdelivr.net/npm/markmap-lib@0.17.0/dist/browser/index.min.js",
-        "https://unpkg.com/markmap-lib@0.17.0/dist/browser/index.min.js"
-      ],
-      markmapView: [
-        "https://cdn.jsdelivr.net/npm/markmap-view@0.17.0/dist/browser/index.min.js",
-        "https://unpkg.com/markmap-view@0.17.0/dist/browser/index.min.js"
-      ]
-    };
+    (function () {
+      const qs = new URLSearchParams(location.search);
+      const isEmbed = qs.get('embed') === '1';
+      if (isEmbed) document.body.classList.add('embed');
 
-    const elStatus = document.getElementById("status");
-    const elStage = document.getElementById("stage");
-    const elEmpty = document.getElementById("empty");
-    const elError = document.getElementById("error");
-    const elErrorDetails = document.getElementById("errorDetails");
-    const elSourcesList = document.getElementById("sourcesList");
-    const elSvg = document.getElementById("svg");
+      const statusEl = document.getElementById('status');
+      const sideEl = document.getElementById('side');
+      const sourcesListEl = document.getElementById('sourcesList');
+      const noticeEl = document.getElementById('notice');
 
-    const elPasteModal = document.getElementById("pasteModal");
-    const elPasteText = document.getElementById("pasteText");
+      const fitBtn = document.getElementById('fitBtn');
+      const srcBtn = document.getElementById('srcBtn');
+      const pasteBtn = document.getElementById('pasteBtn');
+      const clearBtn = document.getElementById('clearBtn');
 
-    function setStatus(text, kind){
-      elStatus.textContent = text;
-      elStatus.classList.remove("ok","warn","bad");
-      if (kind) elStatus.classList.add(kind);
-    }
+      const modal = document.getElementById('modal');
+      const mdInput = document.getElementById('mdInput');
+      const modalClose = document.getElementById('modalClose');
+      const modalCloseTop = document.getElementById('modalCloseTop');
+      const modalApply = document.getElementById('modalApply');
 
-    function showEmpty(show){
-      elEmpty.classList.toggle("show", !!show);
-    }
+      let mm = null;               // Markmap instance
+      let lastMarkdown = '';
+      let lastSources = [];
 
-    function showError(show, details){
-      elError.classList.toggle("show", !!show);
-      if (show) {
-        elErrorDetails.textContent = details || "";
-        setStatus("Library load failed", "bad");
+      function setStatus(text, isError) {
+        statusEl.textContent = text;
+        statusEl.style.borderColor = isError ? 'rgba(255,120,120,.55)' : 'rgba(255,255,255,.10)';
+        statusEl.style.color = isError ? 'rgba(255,200,200,.95)' : 'rgba(229,231,235,.75)';
+        statusEl.style.background = isError ? 'rgba(255,80,80,.08)' : 'rgba(255,255,255,.04)';
       }
-    }
 
-    function loadScript(url){
-      return new Promise((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = url;
-        s.async = true;
-        s.onload = () => resolve(url);
-        s.onerror = () => reject(new Error("Failed to load: " + url));
-        document.head.appendChild(s);
-      });
-    }
+      function showNotice(title, body) {
+        noticeEl.style.display = 'block';
+        noticeEl.innerHTML = '<b>' + escapeHtml(title) + '</b>' + (body ? '<code>' + escapeHtml(body) + '</code>' : '');
+      }
+      function hideNotice() {
+        noticeEl.style.display = 'none';
+        noticeEl.innerHTML = '';
+      }
 
-    async function loadWithFallback(name, urls){
-      let lastErr = null;
-      for (const url of urls) {
-        try {
-          setStatus("Loading " + name + "…", "warn");
-          await loadScript(url);
-          return url;
-        } catch (e) {
-          lastErr = e;
+      function escapeHtml(s) {
+        return String(s ?? '')
+          .replaceAll('&','&amp;')
+          .replaceAll('<','&lt;')
+          .replaceAll('>','&gt;');
+      }
+
+      function uniqSources(arr) {
+        const out = [];
+        const seen = new Set();
+        (Array.isArray(arr) ? arr : []).forEach((s) => {
+          const doc_id = String(s?.doc_id ?? '');
+          const title = String(s?.title ?? s?.name ?? '');
+          const chunk = String(s?.chunk_index ?? s?.chunk ?? '');
+          const url = String(s?.source_url ?? s?.url ?? '');
+          const key = [doc_id, title, chunk, url].join('|').toLowerCase();
+          if (key.trim() && !seen.has(key)) { seen.add(key); out.push({ doc_id, title, chunk, url }); }
+        });
+        return out;
+      }
+
+      function renderSources(arr) {
+        const items = uniqSources(arr);
+        sourcesListEl.innerHTML = '';
+        if (!items.length) {
+          sourcesListEl.innerHTML = '<div style="color:rgba(229,231,235,.75);font-size:13px;">No sources supplied.</div>';
+          return;
         }
-      }
-      throw lastErr || new Error("Unknown error loading " + name);
-    }
-
-    // ------------------------------------------------------------
-    // Markmap renderer
-    // ------------------------------------------------------------
-    let transformer = null;
-    let mm = null;
-    let currentMarkdown = "";
-    let currentSources = [];
-
-    function dedupeSources(arr){
-      const out = [];
-      const seen = new Set();
-      for (const s of (Array.isArray(arr) ? arr : [])) {
-        const title = String(s.title || "").trim();
-        const docId = String(s.doc_id || s.docId || "").trim();
-        const url = String(s.source_url || s.url || "").trim();
-        const key = (docId || title || url || JSON.stringify(s)).toLowerCase();
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        out.push({
-          title: title || "Source",
-          doc_id: docId || "",
-          source_url: url || "",
-          chunk_index: (typeof s.chunk_index === "number") ? s.chunk_index : (s.chunkIndex ?? "")
+        items.forEach((s) => {
+          const div = document.createElement('div');
+          div.className = 'source';
+          const label = (s.doc_id || s.title || 'Source').trim();
+          const sub = [
+            s.title && s.title !== label ? s.title : '',
+            s.chunk ? ('Chunk ' + s.chunk) : ''
+          ].filter(Boolean).join(' • ');
+          const link = s.url ? ('<a href="' + s.url + '" target="_blank" rel="noopener" style="color:rgba(180,210,255,.95);text-decoration:none;">Open</a>') : '';
+          div.innerHTML =
+            '<b>' + escapeHtml(label) + '</b>' +
+            (sub ? ('<div style="color:rgba(229,231,235,.75);margin-top:2px;">' + escapeHtml(sub) + '</div>') : '') +
+            (link ? ('<div style="margin-top:6px;">' + link + '</div>') : '');
+          sourcesListEl.appendChild(div);
         });
       }
-      return out;
-    }
 
-    function renderSources(){
-      elSourcesList.innerHTML = "";
-      if (!currentSources.length) {
-        elSourcesList.innerHTML = '<div class="src-meta">No sources received yet.</div>';
-        return;
-      }
-      for (const s of currentSources) {
-        const card = document.createElement("div");
-        card.className = "src-card";
+      // Load external scripts in order, trying a list of URLs for each.
+      function loadScriptAny(urls) {
+        return new Promise((resolve, reject) => {
+          const list = Array.isArray(urls) ? urls.slice() : [];
+          const tried = [];
+          function next() {
+            if (!list.length) return reject(new Error('All URLs failed:\n' + tried.join('\n')));
+            const url = list.shift();
+            tried.push(url);
 
-        const t = document.createElement("div");
-        t.className = "src-title";
-        t.textContent = s.title || "Source";
-
-        const m = document.createElement("div");
-        m.className = "src-meta";
-        const parts = [];
-        if (s.doc_id) parts.push("doc_id: " + s.doc_id);
-        if (s.chunk_index !== "" && s.chunk_index !== null && s.chunk_index !== undefined) parts.push("chunk: " + s.chunk_index);
-        m.textContent = parts.join(" • ") || "";
-
-        card.appendChild(t);
-        if (m.textContent) card.appendChild(m);
-
-        if (s.source_url) {
-          const a = document.createElement("a");
-          a.className = "src-link";
-          a.href = s.source_url;
-          a.target = "_blank";
-          a.rel = "noopener";
-          a.textContent = "Open source";
-          card.appendChild(a);
-        }
-
-        elSourcesList.appendChild(card);
-      }
-    }
-
-    function ensureMarkmap(){
-      if (!window.markmap || !window.markmap.Transformer || !window.markmap.Markmap) {
-        throw new Error("Markmap globals are missing after load (window.markmap.Transformer/Markmap).");
-      }
-      if (!transformer) transformer = new window.markmap.Transformer();
-      return { Transformer: window.markmap.Transformer, Markmap: window.markmap.Markmap };
-    }
-
-    function renderMarkdown(md){
-      currentMarkdown = String(md || "").trim();
-      if (!currentMarkdown) {
-        showError(false);
-        showEmpty(true);
-        setStatus("Waiting for content…", "warn");
-        return;
+            const s = document.createElement('script');
+            s.src = url;
+            s.async = true;
+            s.onload = () => resolve({ url, tried });
+            s.onerror = () => {
+              s.remove();
+              next();
+            };
+            document.head.appendChild(s);
+          }
+          next();
+        });
       }
 
-      showEmpty(false);
-      showError(false);
+      async function loadLibraries() {
+        setStatus('Loading libraries…');
+        hideNotice();
 
-      const { Markmap } = ensureMarkmap();
-      const { root } = transformer.transform(currentMarkdown);
-
-      if (!mm) {
-        mm = Markmap.create(elSvg, {
-          duration: 0,
-          maxWidth: 320,
-          paddingX: 12,
-          spacingHorizontal: 90,
-          spacingVertical: 10
-        }, root);
-      } else {
-        mm.setData(root);
-      }
-
-      fitNow();
-      setStatus("Rendered", "ok");
-    }
-
-    function fitNow(){
-      try {
-        if (mm && mm.fit) mm.fit();
-      } catch (e) {
-        // non-fatal
-      }
-    }
-
-    // ------------------------------------------------------------
-    // UI events
-    // ------------------------------------------------------------
-    document.getElementById("btnSources").addEventListener("click", () => {
-      elStage.classList.toggle("sources-open");
-    });
-
-    document.getElementById("btnFit").addEventListener("click", () => fitNow());
-
-    document.getElementById("btnClear").addEventListener("click", () => {
-      currentMarkdown = "";
-      currentSources = [];
-      renderSources();
-      mm = null;
-      transformer = transformer || null;
-      elSvg.innerHTML = "";
-      showEmpty(true);
-      showError(false);
-      setStatus("Waiting for content…", "warn");
-    });
-
-    document.getElementById("btnPaste").addEventListener("click", () => {
-      elPasteText.value = currentMarkdown || "";
-      elPasteModal.classList.add("show");
-      setTimeout(() => elPasteText.focus(), 50);
-    });
-
-    function closePaste(){
-      elPasteModal.classList.remove("show");
-    }
-    document.getElementById("btnPasteClose").addEventListener("click", closePaste);
-    document.getElementById("btnPasteCancel").addEventListener("click", closePaste);
-    document.getElementById("btnPasteApply").addEventListener("click", () => {
-      closePaste();
-      renderMarkdown(elPasteText.value);
-    });
-
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closePaste();
-    });
-
-    window.addEventListener("resize", () => {
-      // small debounce
-      clearTimeout(window.__fitTimer);
-      window.__fitTimer = setTimeout(() => fitNow(), 120);
-    });
-
-    // ------------------------------------------------------------
-    // postMessage API (for Squarespace overlay / web app)
-    // Send:
-    //   iframe.contentWindow.postMessage({ type:'vat-mindmap:set', markdown:'...', sources:[...] }, '*')
-    // ------------------------------------------------------------
-    window.addEventListener("message", (event) => {
-      const data = event.data;
-
-      // Allow either an object message or a raw string markdown
-      if (typeof data === "string") {
+        // Recommended (per Markmap docs): jsDelivr package URLs. :contentReference[oaicite:1]{index=1}
+        // We also keep unpkg as a fallback, but avoid fragile dist paths.
         try {
-          renderMarkdown(data);
+          await loadScriptAny([
+            'https://cdn.jsdelivr.net/npm/d3@7',
+            'https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js',
+            'https://unpkg.com/d3@7'
+          ]);
         } catch (e) {
-          showError(true, String(e && e.message ? e.message : e));
+          setStatus('D3 load failed', true);
+          showNotice('Library load failed', String(e?.message || e));
+          throw e;
         }
-        return;
-      }
 
-      if (!data || typeof data !== "object") return;
-
-      if (data.type === "vat-mindmap:set") {
         try {
-          const md = String(data.markdown || "");
-          const src = dedupeSources(data.sources || []);
-          currentSources = src;
-          renderSources();
-          renderMarkdown(md);
-          // optional ACK
-          try { event.source && event.source.postMessage({ type: "vat-mindmap:ack" }, event.origin); } catch(_){}
+          await loadScriptAny([
+            'https://cdn.jsdelivr.net/npm/markmap-lib@0.17.0',
+            'https://cdn.jsdelivr.net/npm/markmap-lib',
+            'https://unpkg.com/markmap-lib@0.17.0',
+            'https://unpkg.com/markmap-lib'
+          ]);
         } catch (e) {
-          showError(true, String(e && e.message ? e.message : e));
+          setStatus('Markmap-lib load failed', true);
+          showNotice('Library load failed', String(e?.message || e));
+          throw e;
         }
+
+        try {
+          await loadScriptAny([
+            'https://cdn.jsdelivr.net/npm/markmap-view@0.17.0',
+            'https://cdn.jsdelivr.net/npm/markmap-view',
+            'https://unpkg.com/markmap-view@0.17.0',
+            'https://unpkg.com/markmap-view'
+          ]);
+        } catch (e) {
+          setStatus('Markmap-view load failed', true);
+          showNotice('Library load failed', String(e?.message || e));
+          throw e;
+        }
+
+        if (!window.markmap || !window.markmap.Transformer || !window.markmap.Markmap) {
+          const msg = 'Markmap loaded, but window.markmap API is missing. This usually means a blocked/partial CDN response.';
+          setStatus('Markmap API missing', true);
+          showNotice('Library load failed', msg);
+          throw new Error(msg);
+        }
+
+        setStatus('Waiting for content…');
       }
 
-      if (data.type === "vat-mindmap:fit") {
-        fitNow();
+      function buildMap(markdown) {
+        const svg = document.getElementById('mm');
+        svg.innerHTML = '';
+
+        const transformer = new window.markmap.Transformer();
+        const { root } = transformer.transform(markdown || '# VAT\n\n- Waiting for content');
+
+        // deriveOptions exists in many builds; if not, Markmap still works with defaults.
+        const deriveOptions = window.markmap.deriveOptions;
+        const options = deriveOptions ? deriveOptions({}) : {};
+
+        mm = window.markmap.Markmap.create(svg, options, root);
+
+        // Small delay helps first-fit on some browsers
+        setTimeout(() => { try { mm.fit(); } catch(e){} }, 80);
       }
 
-      if (data.type === "vat-mindmap:clear") {
-        document.getElementById("btnClear").click();
+      function setContent(markdown, sources) {
+        lastMarkdown = String(markdown || '').trim();
+        lastSources = Array.isArray(sources) ? sources : [];
+        renderSources(lastSources);
+
+        if (!lastMarkdown) {
+          mm = null;
+          document.getElementById('mm').innerHTML = '';
+          setStatus('Waiting for content…');
+          return;
+        }
+
+        setStatus('Rendering…');
+        hideNotice();
+        buildMap(lastMarkdown);
+        setStatus('Ready');
       }
-    });
 
-    // ------------------------------------------------------------
-    // Boot
-    // ------------------------------------------------------------
-    (async function boot(){
-      try {
-        showEmpty(true);
-        setStatus("Loading libraries…", "warn");
+      // UI
+      fitBtn.addEventListener('click', () => { try { mm && mm.fit(); } catch(e){} });
+      srcBtn.addEventListener('click', () => sideEl.classList.toggle('open'));
+      clearBtn.addEventListener('click', () => setContent('', []));
 
-        const u1 = await loadWithFallback("D3", CDN.d3);
-        const u2 = await loadWithFallback("markmap-lib", CDN.markmapLib);
-        const u3 = await loadWithFallback("markmap-view", CDN.markmapView);
+      pasteBtn.addEventListener('click', () => {
+        mdInput.value = lastMarkdown || DEFAULT_MD;
+        modal.classList.add('open');
+        mdInput.focus();
+      });
+      function closeModal(){ modal.classList.remove('open'); }
+      modalClose.addEventListener('click', closeModal);
+      modalCloseTop.addEventListener('click', closeModal);
+      modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+      modalApply.addEventListener('click', () => {
+        setContent(mdInput.value, lastSources);
+        closeModal();
+      });
 
-        // sanity check
-        ensureMarkmap();
+      // Default markdown for testing (so you can immediately see “something”).
+      const DEFAULT_MD = `# VAT
 
-        setStatus("Ready (waiting for content)", "ok");
-        showError(false);
+## Animal feed
+- Pet food exceptions
+- Working animals
 
-        // If someone opens the page directly, leave it waiting.
-        // You can paste markdown via the Paste button.
+## Food & drink
+- Catering rules
+- Takeaway vs eat-in
+`;
 
-      } catch (e) {
-        const msg = (e && e.message) ? e.message : String(e);
-        showError(true, msg);
-      }
+      // PostMessage API (for Squarespace / parent pages)
+      // Expected:
+      //   { type: 'vat_mindmap', markdown: '...', sources: [...] }
+      // Optional:
+      //   { type: 'vat_mindmap_cmd', cmd: 'fit' | 'clear' | 'sources_open' | 'sources_close' }
+      window.addEventListener('message', (ev) => {
+        const data = ev?.data || {};
+        if (data.type === 'vat_mindmap') {
+          setContent(data.markdown || '', data.sources || []);
+          if (data.fit) { try { mm && mm.fit(); } catch(e){} }
+        }
+        if (data.type === 'vat_mindmap_cmd') {
+          const cmd = String(data.cmd || '');
+          if (cmd === 'fit') { try { mm && mm.fit(); } catch(e){} }
+          if (cmd === 'clear') setContent('', []);
+          if (cmd === 'sources_open') sideEl.classList.add('open');
+          if (cmd === 'sources_close') sideEl.classList.remove('open');
+        }
+      });
+
+      // Boot
+      loadLibraries()
+        .then(() => {
+          // If someone visits the page directly, show a tiny default so they know it works.
+          // If you prefer it truly blank, delete the next line.
+          setContent(DEFAULT_MD, []);
+        })
+        .catch(() => {
+          // Notice already shown
+        });
+
     })();
   </script>
 </body>
 </html>
+ 
