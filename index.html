@@ -4,483 +4,517 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
-
   <style>
     :root{
-      --bg1:#0b1220;
-      --bg2:#0a1a2c;
-      --panel:rgba(7,12,22,.92);
-      --panel2:rgba(255,255,255,.06);
-      --text:#e5e7eb;
-      --muted:rgba(229,231,235,.75);
+      --bg0:#0b1220;
+      --bg1:#0d1b2a;
+      --fg:#e5eefb;
+      --muted:rgba(229,238,251,.72);
       --border:rgba(255,255,255,.10);
-      --accent:rgba(255,255,255,.12);
+      --btnbg:rgba(255,255,255,.06);
+      --btnbg2:rgba(255,255,255,.10);
+      --mmFont:16px;
     }
-    html, body { height:100%; margin:0; }
+    html, body { height: 100%; margin: 0; }
     body{
-      background: radial-gradient(1200px 700px at 20% 10%, var(--bg2), var(--bg1));
-      color:var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      overflow:hidden;
+      background: radial-gradient(1200px 800px at 20% 10%, rgba(62,84,140,.35), transparent 60%),
+                  radial-gradient(1000px 700px at 80% 80%, rgba(40,120,130,.25), transparent 60%),
+                  linear-gradient(180deg, var(--bg0), var(--bg1));
+      color: var(--fg);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      overflow: hidden;
     }
 
     .topbar{
-      position:fixed; top:0; left:0; right:0;
-      height:52px;
-      display:flex; align-items:center; gap:10px;
-      padding:0 12px;
-      background:var(--panel);
-      border-bottom:1px solid var(--panel2);
-      z-index:10;
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 56px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 14px;
+      background: rgba(7, 12, 22, 0.78);
+      border-bottom: 1px solid var(--border);
+      z-index: 10;
+      backdrop-filter: blur(10px);
     }
-    .title{ font-weight:650; letter-spacing:.2px; opacity:.95; }
+    .title{
+      font-weight: 650;
+      letter-spacing: .2px;
+      white-space: nowrap;
+    }
     .pill{
-      font-size:12px;
-      padding:4px 8px;
-      border:1px solid var(--border);
-      border-radius:999px;
-      color:var(--muted);
-      background:rgba(255,255,255,.04);
-      white-space:nowrap;
+      font-size: 12px;
+      padding: 5px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255,255,255,.04);
+      white-space: nowrap;
     }
-    .spacer{ flex:1; }
+    .spacer{ flex: 1; }
 
     .btn{
-      appearance:none;
-      border:1px solid var(--border);
-      background:rgba(255,255,255,.06);
-      color:var(--text);
-      padding:7px 10px;
-      border-radius:10px;
-      cursor:pointer;
-      font-size:13px;
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--btnbg);
+      color: var(--fg);
+      padding: 8px 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
     }
-    .btn:hover{ background:rgba(255,255,255,.10); }
-    .btn:active{ transform:translateY(1px); }
+    .btn:hover{ background: var(--btnbg2); }
+    .btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+    .wrap{
+      position: absolute;
+      top: 56px; left: 0; right: 0; bottom: 0;
+      display: grid;
+      grid-template-columns: 0px 1fr;
+      transition: grid-template-columns .18s ease;
+    }
+    .wrap.showSources{
+      grid-template-columns: 360px 1fr;
+    }
+
+    .sources{
+      border-right: 1px solid var(--border);
+      background: rgba(7, 12, 22, 0.55);
+      backdrop-filter: blur(10px);
+      overflow: auto;
+      padding: 14px;
+    }
+    .sources h3{
+      margin: 6px 0 12px;
+      font-size: 14px;
+      letter-spacing: .2px;
+      color: var(--fg);
+    }
+    .srcItem{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      border-radius: 14px;
+      padding: 10px 10px;
+      margin-bottom: 10px;
+    }
+    .srcTitle{
+      font-size: 13px;
+      font-weight: 650;
+      margin: 0 0 4px;
+    }
+    .srcMeta{
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
 
     .stage{
-      position:absolute;
-      top:52px; left:0; right:0; bottom:0;
+      position: relative;
+      overflow: hidden;
     }
-    /* embed=1 gives true full-screen */
-    body.embed .stage{ top:0; }
-    body.embed .topbar{ display:none; }
+    #svg{
+      width: 100%;
+      height: 100%;
+    }
+    /* Markmap text sizing */
+    #svg{ font-size: var(--mmFont); }
 
-    svg{
-      width:100%;
-      height:100%;
-      display:block;
-      /* helps deep trees readability a bit */
-      font-size:14px;
+    .toast{
+      position: fixed;
+      left: 14px;
+      bottom: 14px;
+      max-width: min(820px, calc(100vw - 28px));
+      border: 1px solid var(--border);
+      background: rgba(7, 12, 22, 0.78);
+      color: var(--fg);
+      padding: 10px 12px;
+      border-radius: 14px;
+      backdrop-filter: blur(10px);
+      z-index: 20;
+      display: none;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 13px;
     }
-
-    .side{
-      position:fixed;
-      top:52px; bottom:0; left:0;
-      width:340px;
-      transform:translateX(-102%);
-      transition:transform .2s ease;
-      background:rgba(7,12,22,.94);
-      border-right:1px solid var(--panel2);
-      z-index:9;
-      padding:12px;
-      overflow:auto;
-    }
-    body.embed .side{ top:0; }
-    .side.open{ transform:translateX(0); }
-    .side h3{
-      margin:4px 0 10px 0;
-      font-size:14px;
-      letter-spacing:.2px;
-      opacity:.9;
-    }
-    .source{
-      border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.05);
-      border-radius:12px;
-      padding:10px;
-      margin:0 0 10px 0;
-      font-size:13px;
-      line-height:1.35;
-    }
-    .source b{ display:block; margin-bottom:3px; }
 
     .modal{
-      position:fixed; inset:0;
-      background:rgba(0,0,0,.55);
-      display:none;
-      align-items:center;
-      justify-content:center;
-      z-index:20;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.55);
+      display: none;
+      z-index: 30;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
     }
-    .modal.open{ display:flex; }
-    .card{
-      width:min(900px, calc(100vw - 28px));
-      height:min(560px, calc(100vh - 28px));
-      background:rgba(10,18,32,.96);
-      border:1px solid rgba(255,255,255,.12);
-      border-radius:18px;
-      box-shadow: 0 20px 70px rgba(0,0,0,.55);
-      display:flex;
-      flex-direction:column;
-      overflow:hidden;
+    .modalCard{
+      width: min(980px, 100%);
+      max-height: min(80vh, 720px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: rgba(7, 12, 22, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 14px;
+      backdrop-filter: blur(10px);
     }
-    .cardhead{
-      display:flex; align-items:center; gap:10px;
-      padding:12px 12px;
-      border-bottom:1px solid rgba(255,255,255,.10);
+    .modalCard h3{
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: .2px;
     }
-    .cardhead .hint{ color:var(--muted); font-size:12px; }
     textarea{
-      flex:1;
-      width:100%;
-      resize:none;
-      border:0;
-      outline:none;
-      padding:12px;
-      background:transparent;
-      color:var(--text);
+      width: 100%;
+      min-height: 280px;
+      resize: vertical;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--fg);
+      padding: 12px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size:12px;
-      line-height:1.5;
+      font-size: 12px;
+      line-height: 1.4;
+      outline: none;
     }
-    .cardfoot{
-      display:flex; gap:10px; justify-content:flex-end;
-      padding:12px;
-      border-top:1px solid rgba(255,255,255,.10);
-    }
-
-    .centerNotice{
-      position:absolute;
-      left:50%; top:50%;
-      transform:translate(-50%,-50%);
-      width:min(920px, calc(100vw - 28px));
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255шин,.12);
-      border-radius:18px;
-      padding:14px 16px;
-      color:var(--muted);
-      z-index:5;
-      display:none;
-    }
-    .centerNotice b{ color:var(--text); }
-    .centerNotice code{
-      display:block;
-      margin-top:8px;
-      padding:10px;
-      border-radius:12px;
-      background:rgba(0,0,0,.25);
-      border:1px solid rgba(255,255,255,.10);
-      color:var(--text);
-      overflow:auto;
-      white-space:pre-wrap;
-      word-break:break-word;
-      font-size:12px;
+    .row{
+      display:flex;
+      gap:10px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
     }
   </style>
 </head>
-
 <body>
+
   <div class="topbar">
     <div class="title">VAT Mindmap</div>
     <div id="status" class="pill">Loading libraries…</div>
+
     <div class="spacer"></div>
-    <button class="btn" id="fitBtn">Fit</button>
-    <button class="btn" id="srcBtn">Sources</button>
-    <button class="btn" id="pasteBtn">Paste</button>
-    <button class="btn" id="clearBtn">Clear</button>
+
+    <button class="btn" id="btnFit" disabled>Fit</button>
+    <button class="btn" id="btnDepthDown" disabled>- Depth</button>
+    <button class="btn" id="btnDepthUp" disabled>+ Depth</button>
+    <button class="btn" id="btnFontDown" disabled>- Font</button>
+    <button class="btn" id="btnFontUp" disabled>+ Font</button>
+
+    <button class="btn" id="btnSources" disabled>Sources</button>
+    <button class="btn" id="btnPaste" disabled>Paste</button>
+    <button class="btn" id="btnClear" disabled>Clear</button>
   </div>
 
-  <div id="side" class="side">
-    <h3>Verified sources</h3>
-    <div id="sourcesList"></div>
+  <div id="wrap" class="wrap">
+    <aside class="sources" id="sourcesPanel">
+      <h3>Verified sources</h3>
+      <div id="sourcesList"></div>
+      <p class="srcMeta" style="margin-top:12px;">These are the documents used to build the map.</p>
+    </aside>
+
+    <main class="stage">
+      <svg id="svg"></svg>
+    </main>
   </div>
 
-  <div class="stage">
-    <svg id="mm"></svg>
-    <div id="notice" class="centerNotice"></div>
-  </div>
+  <div id="toast" class="toast"></div>
 
   <div id="modal" class="modal">
-    <div class="card">
-      <div class="cardhead">
-        <div style="font-weight:650;">Paste mindmap markdown</div>
-        <div class="hint">This is only for testing. Your Squarespace page will send the markdown automatically.</div>
-        <div class="spacer"></div>
-        <button class="btn" id="modalCloseTop">Close</button>
-      </div>
-      <textarea id="mdInput" spellcheck="false"></textarea>
-      <div class="cardfoot">
-        <button class="btn" id="modalClose">Cancel</button>
-        <button class="btn" id="modalApply">Apply</button>
+    <div class="modalCard">
+      <h3>Paste mindmap markdown</h3>
+      <textarea id="mdInput" placeholder="# UK VAT — Food & Catering
+- Zero-rated (0%)
+  - Takeaway (cold)
+    - ..."></textarea>
+      <div class="row">
+        <button class="btn" id="btnCancel">Cancel</button>
+        <button class="btn" id="btnRender">Render</button>
       </div>
     </div>
   </div>
 
-  <script>
-    (function () {
-      const qs = new URLSearchParams(location.search);
-      const isEmbed = qs.get('embed') === '1';
-      if (isEmbed) document.body.classList.add('embed');
+<script>
+(function(){
+  "use strict";
 
-      const statusEl = document.getElementById('status');
-      const sideEl = document.getElementById('side');
-      const sourcesListEl = document.getElementById('sourcesList');
-      const noticeEl = document.getElementById('notice');
+  const statusEl = document.getElementById("status");
+  const toastEl = document.getElementById("toast");
+  const wrapEl = document.getElementById("wrap");
 
-      const fitBtn = document.getElementById('fitBtn');
-      const srcBtn = document.getElementById('srcBtn');
-      const pasteBtn = document.getElementById('pasteBtn');
-      const clearBtn = document.getElementById('clearBtn');
+  const btnFit = document.getElementById("btnFit");
+  const btnSources = document.getElementById("btnSources");
+  const btnPaste = document.getElementById("btnPaste");
+  const btnClear = document.getElementById("btnClear");
+  const btnDepthDown = document.getElementById("btnDepthDown");
+  const btnDepthUp = document.getElementById("btnDepthUp");
+  const btnFontDown = document.getElementById("btnFontDown");
+  const btnFontUp = document.getElementById("btnFontUp");
 
-      const modal = document.getElementById('modal');
-      const mdInput = document.getElementById('mdInput');
-      const modalClose = document.getElementById('modalClose');
-      const modalCloseTop = document.getElementById('modalCloseTop');
-      const modalApply = document.getElementById('modalApply');
+  const modalEl = document.getElementById("modal");
+  const mdInput = document.getElementById("mdInput");
+  const btnCancel = document.getElementById("btnCancel");
+  const btnRender = document.getElementById("btnRender");
 
-      let mm = null;               // Markmap instance
-      let lastMarkdown = '';
-      let lastSources = [];
+  const sourcesListEl = document.getElementById("sourcesList");
 
-      function setStatus(text, isError) {
-        statusEl.textContent = text;
-        statusEl.style.borderColor = isError ? 'rgba(255,120,120,.55)' : 'rgba(255,255,255,.10)';
-        statusEl.style.color = isError ? 'rgba(255,200,200,.95)' : 'rgba(229,231,235,.75)';
-        statusEl.style.background = isError ? 'rgba(255,80,80,.08)' : 'rgba(255,255,255,.04)';
-      }
+  let mm = null;
+  let transformer = null;
+  let currentData = null;
+  let currentMarkdown = "";
+  let currentSources = [];
+  let expandLevel = 3;     // default collapsed beyond level 3
+  let fontPx = 16;
 
-      function showNotice(title, body) {
-        noticeEl.style.display = 'block';
-        noticeEl.innerHTML = '<b>' + escapeHtml(title) + '</b>' + (body ? '<code>' + escapeHtml(body) + '</code>' : '');
-      }
-      function hideNotice() {
-        noticeEl.style.display = 'none';
-        noticeEl.innerHTML = '';
-      }
+  function setStatus(text){ statusEl.textContent = text; }
+  function showToast(text){
+    toastEl.textContent = text;
+    toastEl.style.display = "block";
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=> toastEl.style.display="none", 6500);
+  }
 
-      function escapeHtml(s) {
-        return String(s ?? '')
-          .replaceAll('&','&amp;')
-          .replaceAll('<','&lt;')
-          .replaceAll('>','&gt;');
-      }
-
-      function uniqSources(arr) {
-        const out = [];
-        const seen = new Set();
-        (Array.isArray(arr) ? arr : []).forEach((s) => {
-          const doc_id = String(s?.doc_id ?? '');
-          const title = String(s?.title ?? s?.name ?? '');
-          const chunk = String(s?.chunk_index ?? s?.chunk ?? '');
-          const url = String(s?.source_url ?? s?.url ?? '');
-          const key = [doc_id, title, chunk, url].join('|').toLowerCase();
-          if (key.trim() && !seen.has(key)) { seen.add(key); out.push({ doc_id, title, chunk, url }); }
-        });
-        return out;
-      }
-
-      function renderSources(arr) {
-        const items = uniqSources(arr);
-        sourcesListEl.innerHTML = '';
-        if (!items.length) {
-          sourcesListEl.innerHTML = '<div style="color:rgba(229,231,235,.75);font-size:13px;">No sources supplied.</div>';
-          return;
-        }
-        items.forEach((s) => {
-          const div = document.createElement('div');
-          div.className = 'source';
-          const label = (s.doc_id || s.title || 'Source').trim();
-          const sub = [
-            s.title && s.title !== label ? s.title : '',
-            s.chunk ? ('Chunk ' + s.chunk) : ''
-          ].filter(Boolean).join(' • ');
-          const link = s.url ? ('<a href="' + s.url + '" target="_blank" rel="noopener" style="color:rgba(180,210,255,.95);text-decoration:none;">Open</a>') : '';
-          div.innerHTML =
-            '<b>' + escapeHtml(label) + '</b>' +
-            (sub ? ('<div style="color:rgba(229,231,235,.75);margin-top:2px;">' + escapeHtml(sub) + '</div>') : '') +
-            (link ? ('<div style="margin-top:6px;">' + link + '</div>') : '');
-          sourcesListEl.appendChild(div);
-        });
-      }
-
-      // Load external scripts in order, trying a list of URLs for each.
-      function loadScriptAny(urls) {
-        return new Promise((resolve, reject) => {
-          const list = Array.isArray(urls) ? urls.slice() : [];
-          const tried = [];
-          function next() {
-            if (!list.length) return reject(new Error('All URLs failed:\n' + tried.join('\n')));
-            const url = list.shift();
-            tried.push(url);
-
-            const s = document.createElement('script');
-            s.src = url;
-            s.async = true;
-            s.onload = () => resolve({ url, tried });
-            s.onerror = () => {
-              s.remove();
-              next();
-            };
-            document.head.appendChild(s);
-          }
-          next();
-        });
-      }
-
-      async function loadLibraries() {
-        setStatus('Loading libraries…');
-        hideNotice();
-
-        // Recommended (per Markmap docs): jsDelivr package URLs. :contentReference[oaicite:1]{index=1}
-        // We also keep unpkg as a fallback, but avoid fragile dist paths.
-        try {
-          await loadScriptAny([
-            'https://cdn.jsdelivr.net/npm/d3@7',
-            'https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js',
-            'https://unpkg.com/d3@7'
-          ]);
-        } catch (e) {
-          setStatus('D3 load failed', true);
-          showNotice('Library load failed', String(e?.message || e));
-          throw e;
-        }
-
-        try {
-          await loadScriptAny([
-            'https://cdn.jsdelivr.net/npm/markmap-lib@0.17.0',
-            'https://cdn.jsdelivr.net/npm/markmap-lib',
-            'https://unpkg.com/markmap-lib@0.17.0',
-            'https://unpkg.com/markmap-lib'
-          ]);
-        } catch (e) {
-          setStatus('Markmap-lib load failed', true);
-          showNotice('Library load failed', String(e?.message || e));
-          throw e;
-        }
-
-        try {
-          await loadScriptAny([
-            'https://cdn.jsdelivr.net/npm/markmap-view@0.17.0',
-            'https://cdn.jsdelivr.net/npm/markmap-view',
-            'https://unpkg.com/markmap-view@0.17.0',
-            'https://unpkg.com/markmap-view'
-          ]);
-        } catch (e) {
-          setStatus('Markmap-view load failed', true);
-          showNotice('Library load failed', String(e?.message || e));
-          throw e;
-        }
-
-        if (!window.markmap || !window.markmap.Transformer || !window.markmap.Markmap) {
-          const msg = 'Markmap loaded, but window.markmap API is missing. This usually means a blocked/partial CDN response.';
-          setStatus('Markmap API missing', true);
-          showNotice('Library load failed', msg);
-          throw new Error(msg);
-        }
-
-        setStatus('Waiting for content…');
-      }
-
-      function buildMap(markdown) {
-        const svg = document.getElementById('mm');
-        svg.innerHTML = '';
-
-        const transformer = new window.markmap.Transformer();
-        const { root } = transformer.transform(markdown || '# VAT\n\n- Waiting for content');
-
-        // deriveOptions exists in many builds; if not, Markmap still works with defaults.
-        const deriveOptions = window.markmap.deriveOptions;
-        const options = deriveOptions ? deriveOptions({}) : {};
-
-        mm = window.markmap.Markmap.create(svg, options, root);
-
-        // Small delay helps first-fit on some browsers
-        setTimeout(() => { try { mm.fit(); } catch(e){} }, 80);
-      }
-
-      function setContent(markdown, sources) {
-        lastMarkdown = String(markdown || '').trim();
-        lastSources = Array.isArray(sources) ? sources : [];
-        renderSources(lastSources);
-
-        if (!lastMarkdown) {
-          mm = null;
-          document.getElementById('mm').innerHTML = '';
-          setStatus('Waiting for content…');
-          return;
-        }
-
-        setStatus('Rendering…');
-        hideNotice();
-        buildMap(lastMarkdown);
-        setStatus('Ready');
-      }
-
-      // UI
-      fitBtn.addEventListener('click', () => { try { mm && mm.fit(); } catch(e){} });
-      srcBtn.addEventListener('click', () => sideEl.classList.toggle('open'));
-      clearBtn.addEventListener('click', () => setContent('', []));
-
-      pasteBtn.addEventListener('click', () => {
-        mdInput.value = lastMarkdown || DEFAULT_MD;
-        modal.classList.add('open');
-        mdInput.focus();
+  function uniqSources(sources){
+    const out = [];
+    const seen = new Set();
+    for(const s of (sources || [])){
+      const doc_id = String(s.doc_id || s.id || "").trim();
+      const title = String(s.title || "").trim();
+      const chunk = (s.chunk_index !== undefined && s.chunk_index !== null) ? String(s.chunk_index) : "";
+      const key = (doc_id + "|" + title + "|" + chunk).toLowerCase();
+      if(!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        doc_id,
+        title,
+        chunk_index: s.chunk_index,
+        id: s.id,
+        source_url: s.source_url
       });
-      function closeModal(){ modal.classList.remove('open'); }
-      modalClose.addEventListener('click', closeModal);
-      modalCloseTop.addEventListener('click', closeModal);
-      modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-      modalApply.addEventListener('click', () => {
-        setContent(mdInput.value, lastSources);
-        closeModal();
-      });
+    }
+    return out;
+  }
 
-      // Default markdown for testing (so you can immediately see “something”).
-      const DEFAULT_MD = `# VAT
+  function renderSources(sources){
+    currentSources = uniqSources(sources);
+    sourcesListEl.innerHTML = "";
+    if(!currentSources.length){
+      const p = document.createElement("p");
+      p.className = "srcMeta";
+      p.textContent = "No sources supplied.";
+      sourcesListEl.appendChild(p);
+      return;
+    }
+    for(const s of currentSources){
+      const card = document.createElement("div");
+      card.className = "srcItem";
 
-## Animal feed
-- Pet food exceptions
-- Working animals
+      const t = document.createElement("p");
+      t.className = "srcTitle";
+      t.textContent = (s.doc_id ? (s.doc_id + ": ") : "") + (s.title || "Source");
+      card.appendChild(t);
 
-## Food & drink
-- Catering rules
-- Takeaway vs eat-in
-`;
+      const m = document.createElement("p");
+      m.className = "srcMeta";
+      const lines = [];
+      if(s.chunk_index !== undefined && s.chunk_index !== null) lines.push("chunk_index: " + s.chunk_index);
+      if(s.id) lines.push("id: " + s.id);
+      if(s.source_url) lines.push("url: " + s.source_url);
+      m.textContent = lines.join("\n");
+      card.appendChild(m);
 
-      // PostMessage API (for Squarespace / parent pages)
-      // Expected:
-      //   { type: 'vat_mindmap', markdown: '...', sources: [...] }
-      // Optional:
-      //   { type: 'vat_mindmap_cmd', cmd: 'fit' | 'clear' | 'sources_open' | 'sources_close' }
-      window.addEventListener('message', (ev) => {
-        const data = ev?.data || {};
-        if (data.type === 'vat_mindmap') {
-          setContent(data.markdown || '', data.sources || []);
-          if (data.fit) { try { mm && mm.fit(); } catch(e){} }
-        }
-        if (data.type === 'vat_mindmap_cmd') {
-          const cmd = String(data.cmd || '');
-          if (cmd === 'fit') { try { mm && mm.fit(); } catch(e){} }
-          if (cmd === 'clear') setContent('', []);
-          if (cmd === 'sources_open') sideEl.classList.add('open');
-          if (cmd === 'sources_close') sideEl.classList.remove('open');
-        }
-      });
+      sourcesListEl.appendChild(card);
+    }
+  }
 
-      // Boot
-      loadLibraries()
-        .then(() => {
-          // If someone visits the page directly, show a tiny default so they know it works.
-          // If you prefer it truly blank, delete the next line.
-          setContent(DEFAULT_MD, []);
-        })
-        .catch(() => {
-          // Notice already shown
-        });
+  function setFont(px){
+    fontPx = Math.max(10, Math.min(22, px));
+    document.documentElement.style.setProperty("--mmFont", fontPx + "px");
+  }
 
-    })();
-  </script>
+  function destroyMap(){
+    if(mm && typeof mm.destroy === "function"){
+      try{ mm.destroy(); } catch(e){}
+    }
+    mm = null;
+  }
+
+  function createMap(data){
+    destroyMap();
+    const svg = document.getElementById("svg");
+    svg.innerHTML = "";
+    mm = window.markmap.Markmap.create(svg, {
+      autoFit: true,
+      duration: 200,
+      initialExpandLevel: expandLevel
+    }, data);
+
+    // Fit once now, then again after fonts settle
+    try{ mm.fit(); } catch(e){}
+    setTimeout(()=> { try{ mm.fit(); } catch(e){} }, 120);
+  }
+
+  function renderMarkdown(md){
+    if(!transformer){
+      showToast("Transformer not ready.");
+      return;
+    }
+    currentMarkdown = String(md || "");
+    const { root } = transformer.transform(currentMarkdown);
+    currentData = root;
+    createMap(currentData);
+    setStatus("Ready");
+  }
+
+  // --- robust script loader (tries multiple CDNs) ---
+  function loadScript(url){
+    return new Promise((resolve, reject)=>{
+      const s = document.createElement("script");
+      s.src = url;
+      s.async = true;
+      s.onload = ()=> resolve(url);
+      s.onerror = ()=> reject(new Error("Failed: " + url));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function loadLibraries(){
+    setStatus("Loading libraries…");
+
+    // D3
+    const d3Candidates = [
+      "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js",
+      "https://unpkg.com/d3@7/dist/d3.min.js"
+    ];
+    let ok = false;
+    for(const u of d3Candidates){
+      try{ await loadScript(u); ok = true; break; } catch(e){}
+    }
+    if(!ok) throw new Error("Could not load D3 from any CDN.");
+
+    // markmap-lib
+    const libCandidates = [
+      "https://cdn.jsdelivr.net/npm/markmap-lib@0.17.0/dist/browser/index.min.js",
+      "https://unpkg.com/markmap-lib@0.17.0/dist/browser/index.min.js"
+    ];
+    ok = false;
+    for(const u of libCandidates){
+      try{ await loadScript(u); ok = true; break; } catch(e){}
+    }
+    if(!ok) throw new Error("Could not load markmap-lib from any CDN.");
+
+    // markmap-view
+    const viewCandidates = [
+      "https://cdn.jsdelivr.net/npm/markmap-view@0.17.0/dist/browser/index.min.js",
+      "https://unpkg.com/markmap-view@0.17.0/dist/browser/index.min.js"
+    ];
+    ok = false;
+    for(const u of viewCandidates){
+      try{ await loadScript(u); ok = true; break; } catch(e){}
+    }
+    if(!ok) throw new Error("Could not load markmap-view from any CDN.");
+
+    transformer = new window.markmap.Transformer();
+
+    setStatus("Ready (no content)");
+    btnFit.disabled = false;
+    btnSources.disabled = false;
+    btnPaste.disabled = false;
+    btnClear.disabled = false;
+    btnDepthDown.disabled = false;
+    btnDepthUp.disabled = false;
+    btnFontDown.disabled = false;
+    btnFontUp.disabled = false;
+
+    setFont(fontPx);
+  }
+
+  // --- UI handlers ---
+  btnSources.addEventListener("click", ()=>{
+    wrapEl.classList.toggle("showSources");
+  });
+  btnFit.addEventListener("click", ()=>{
+    if(mm){ try{ mm.fit(); } catch(e){} }
+  });
+
+  btnDepthDown.addEventListener("click", ()=>{
+    expandLevel = Math.max(1, expandLevel - 1);
+    if(currentData) createMap(currentData);
+    showToast("Initial expand depth: " + expandLevel);
+  });
+  btnDepthUp.addEventListener("click", ()=>{
+    expandLevel = Math.min(12, expandLevel + 1);
+    if(currentData) createMap(currentData);
+    showToast("Initial expand depth: " + expandLevel);
+  });
+
+  btnFontDown.addEventListener("click", ()=>{
+    setFont(fontPx - 1);
+    if(mm){ try{ mm.fit(); } catch(e){} }
+  });
+  btnFontUp.addEventListener("click", ()=>{
+    setFont(fontPx + 1);
+    if(mm){ try{ mm.fit(); } catch(e){} }
+  });
+
+  btnPaste.addEventListener("click", ()=>{
+    modalEl.style.display = "flex";
+    mdInput.value = currentMarkdown || "";
+    mdInput.focus();
+  });
+  btnCancel.addEventListener("click", ()=>{
+    modalEl.style.display = "none";
+  });
+  btnRender.addEventListener("click", ()=>{
+    modalEl.style.display = "none";
+    renderMarkdown(mdInput.value);
+  });
+
+  btnClear.addEventListener("click", ()=>{
+    currentMarkdown = "";
+    currentData = null;
+    destroyMap();
+    document.getElementById("svg").innerHTML = "";
+    setStatus("Ready (no content)");
+  });
+
+  window.addEventListener("resize", ()=>{
+    if(mm){ try{ mm.fit(); } catch(e){} }
+  });
+
+  // --- Accept content from Squarespace via postMessage ---
+  window.addEventListener("message", (ev)=>{
+    const msg = ev && ev.data ? ev.data : null;
+    if(!msg || typeof msg !== "object") return;
+
+    // expected:
+    // { type: "vat_mindmap", markdown: "...", sources: [...], title: "..." }
+    if(msg.type !== "vat_mindmap") return;
+
+    try{
+      if(msg.title && typeof msg.title === "string"){
+        document.title = msg.title;
+      }
+      if(Array.isArray(msg.sources)) renderSources(msg.sources);
+      if(typeof msg.markdown === "string" && msg.markdown.trim()){
+        renderMarkdown(msg.markdown);
+      } else {
+        setStatus("Ready (no content)");
+      }
+    } catch(e){
+      setStatus("Error");
+      showToast("Failed to render message: " + (e && e.message ? e.message : String(e)));
+    }
+  });
+
+  // If someone opens the viewer directly, allow manual paste.
+  // You can also add a small demo here if you want, but leaving blank is safer.
+
+  loadLibraries().catch(err=>{
+    setStatus("Library load failed");
+    showToast(String(err && err.message ? err.message : err));
+  });
+
+})();
+</script>
 </body>
 </html>
- 
