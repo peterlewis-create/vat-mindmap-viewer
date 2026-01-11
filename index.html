@@ -1,520 +1,123 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>VAT Mindmap Viewer</title>
-  <style>
-    :root{
-      --bg0:#0b1220;
-      --bg1:#0d1b2a;
-      --fg:#e5eefb;
-      --muted:rgba(229,238,251,.72);
-      --border:rgba(255,255,255,.10);
-      --btnbg:rgba(255,255,255,.06);
-      --btnbg2:rgba(255,255,255,.10);
-      --mmFont:16px;
-    }
-    html, body { height: 100%; margin: 0; }
-    body{
-      background: radial-gradient(1200px 800px at 20% 10%, rgba(62,84,140,.35), transparent 60%),
-                  radial-gradient(1000px 700px at 80% 80%, rgba(40,120,130,.25), transparent 60%),
-                  linear-gradient(180deg, var(--bg0), var(--bg1));
-      color: var(--fg);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      overflow: hidden;
-    }
+// Nuance Query Generator (deduped, multi-match, ASCII-only)
 
-    .topbar{
-      position: fixed; top: 0; left: 0; right: 0;
-      height: 56px;
-      display: flex; align-items: center; gap: 10px;
-      padding: 0 14px;
-      background: rgba(7, 12, 22, 0.78);
-      border-bottom: 1px solid var(--border);
-      z-index: 10;
-      backdrop-filter: blur(10px);
-    }
-    .title{
-      font-weight: 650;
-      letter-spacing: .2px;
-      white-space: nowrap;
-    }
-    .pill{
-      font-size: 12px;
-      padding: 5px 10px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      color: var(--muted);
-      background: rgba(255,255,255,.04);
-      white-space: nowrap;
-    }
-    .spacer{ flex: 1; }
-
-    .btn{
-      appearance: none;
-      border: 1px solid var(--border);
-      background: var(--btnbg);
-      color: var(--fg);
-      padding: 8px 10px;
-      border-radius: 12px;
-      cursor: pointer;
-      font-size: 13px;
-      line-height: 1;
-    }
-    .btn:hover{ background: var(--btnbg2); }
-    .btn:disabled{ opacity:.5; cursor:not-allowed; }
-
-    .wrap{
-      position: absolute;
-      top: 56px; left: 0; right: 0; bottom: 0;
-      display: grid;
-      grid-template-columns: 0px 1fr;
-      transition: grid-template-columns .18s ease;
-    }
-    .wrap.showSources{
-      grid-template-columns: 360px 1fr;
-    }
-
-    .sources{
-      border-right: 1px solid var(--border);
-      background: rgba(7, 12, 22, 0.55);
-      backdrop-filter: blur(10px);
-      overflow: auto;
-      padding: 14px;
-    }
-    .sources h3{
-      margin: 6px 0 12px;
-      font-size: 14px;
-      letter-spacing: .2px;
-      color: var(--fg);
-    }
-    .srcItem{
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,.04);
-      border-radius: 14px;
-      padding: 10px 10px;
-      margin-bottom: 10px;
-    }
-    .srcTitle{
-      font-size: 13px;
-      font-weight: 650;
-      margin: 0 0 4px;
-    }
-    .srcMeta{
-      font-size: 12px;
-      color: var(--muted);
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .stage{
-      position: relative;
-      overflow: hidden;
-    }
-    #svg{
-      width: 100%;
-      height: 100%;
-    }
-    /* Markmap text sizing */
-    #svg{ font-size: var(--mmFont); }
-
-    .toast{
-      position: fixed;
-      left: 14px;
-      bottom: 14px;
-      max-width: min(820px, calc(100vw - 28px));
-      border: 1px solid var(--border);
-      background: rgba(7, 12, 22, 0.78);
-      color: var(--fg);
-      padding: 10px 12px;
-      border-radius: 14px;
-      backdrop-filter: blur(10px);
-      z-index: 20;
-      display: none;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 13px;
-    }
-
-    .modal{
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,.55);
-      display: none;
-      z-index: 30;
-      align-items: center;
-      justify-content: center;
-      padding: 18px;
-    }
-    .modalCard{
-      width: min(980px, 100%);
-      max-height: min(80vh, 720px);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      background: rgba(7, 12, 22, 0.92);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 14px;
-      backdrop-filter: blur(10px);
-    }
-    .modalCard h3{
-      margin: 0;
-      font-size: 14px;
-      letter-spacing: .2px;
-    }
-    textarea{
-      width: 100%;
-      min-height: 280px;
-      resize: vertical;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,.04);
-      color: var(--fg);
-      padding: 12px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-      line-height: 1.4;
-      outline: none;
-    }
-    .row{
-      display:flex;
-      gap:10px;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-    }
-  </style>
-</head>
-<body>
-
-  <div class="topbar">
-    <div class="title">VAT Mindmap</div>
-    <div id="status" class="pill">Loading libraries…</div>
-
-    <div class="spacer"></div>
-
-    <button class="btn" id="btnFit" disabled>Fit</button>
-    <button class="btn" id="btnDepthDown" disabled>- Depth</button>
-    <button class="btn" id="btnDepthUp" disabled>+ Depth</button>
-    <button class="btn" id="btnFontDown" disabled>- Font</button>
-    <button class="btn" id="btnFontUp" disabled>+ Font</button>
-
-    <button class="btn" id="btnSources" disabled>Sources</button>
-    <button class="btn" id="btnPaste" disabled>Paste</button>
-    <button class="btn" id="btnClear" disabled>Clear</button>
-  </div>
-
-  <div id="wrap" class="wrap">
-    <aside class="sources" id="sourcesPanel">
-      <h3>Verified sources</h3>
-      <div id="sourcesList"></div>
-      <p class="srcMeta" style="margin-top:12px;">These are the documents used to build the map.</p>
-    </aside>
-
-    <main class="stage">
-      <svg id="svg"></svg>
-    </main>
-  </div>
-
-  <div id="toast" class="toast"></div>
-
-  <div id="modal" class="modal">
-    <div class="modalCard">
-      <h3>Paste mindmap markdown</h3>
-      <textarea id="mdInput" placeholder="# UK VAT — Food & Catering
-- Zero-rated (0%)
-  - Takeaway (cold)
-    - ..."></textarea>
-      <div class="row">
-        <button class="btn" id="btnCancel">Cancel</button>
-        <button class="btn" id="btnRender">Render</button>
-      </div>
-    </div>
-  </div>
-
-<script>
-(function(){
-  "use strict";
-
-  const statusEl = document.getElementById("status");
-  const toastEl = document.getElementById("toast");
-  const wrapEl = document.getElementById("wrap");
-
-  const btnFit = document.getElementById("btnFit");
-  const btnSources = document.getElementById("btnSources");
-  const btnPaste = document.getElementById("btnPaste");
-  const btnClear = document.getElementById("btnClear");
-  const btnDepthDown = document.getElementById("btnDepthDown");
-  const btnDepthUp = document.getElementById("btnDepthUp");
-  const btnFontDown = document.getElementById("btnFontDown");
-  const btnFontUp = document.getElementById("btnFontUp");
-
-  const modalEl = document.getElementById("modal");
-  const mdInput = document.getElementById("mdInput");
-  const btnCancel = document.getElementById("btnCancel");
-  const btnRender = document.getElementById("btnRender");
-
-  const sourcesListEl = document.getElementById("sourcesList");
-
-  let mm = null;
-  let transformer = null;
-  let currentData = null;
-  let currentMarkdown = "";
-  let currentSources = [];
-  let expandLevel = 3;     // default collapsed beyond level 3
-  let fontPx = 16;
-
-  function setStatus(text){ statusEl.textContent = text; }
-  function showToast(text){
-    toastEl.textContent = text;
-    toastEl.style.display = "block";
-    clearTimeout(showToast._t);
-    showToast._t = setTimeout(()=> toastEl.style.display="none", 6500);
+function safeNodeJson(name) {
+  try {
+    const v = $(name).item.json;
+    return (v && typeof v === "object") ? v : {};
+  } catch (e) {
+    return {};
   }
+}
 
-  function uniqSources(sources){
-    const out = [];
-    const seen = new Set();
-    for(const s of (sources || [])){
-      const doc_id = String(s.doc_id || s.id || "").trim();
-      const title = String(s.title || "").trim();
-      const chunk = (s.chunk_index !== undefined && s.chunk_index !== null) ? String(s.chunk_index) : "";
-      const key = (doc_id + "|" + title + "|" + chunk).toLowerCase();
-      if(!key || seen.has(key)) continue;
-      seen.add(key);
-      out.push({
-        doc_id,
-        title,
-        chunk_index: s.chunk_index,
-        id: s.id,
-        source_url: s.source_url
-      });
-    }
-    return out;
+const webhook = safeNodeJson("Webhook");
+const carry = safeNodeJson("Carry on Question");
+const prior = safeNodeJson("Nuance Query Generator"); // if re-running
+
+const body = (webhook.body && typeof webhook.body === "object") ? webhook.body : {};
+const query = (webhook.query && typeof webhook.query === "object") ? webhook.query : {};
+
+const rawQuestion =
+  webhook.question ||
+  webhook.text ||
+  body.question ||
+  query.question ||
+  carry.question ||
+  prior.question ||
+  "";
+
+const question = String(rawQuestion || "").replace(/^[=\uFEFF\s]+/, "").trim();
+const q = question.toLowerCase();
+
+// Rule blocks (keep them short, decision-focused; let Pinecone context do the heavy lifting)
+const BLOCKS = [
+  {
+    id: "food_takeaway_vs_eatin",
+    title: "FOOD & DRINK - EAT-IN VS TAKEAWAY (CATERING RULES)",
+    keywords: ["cafe", "café", "coffee shop", "sandwich", "takeaway", "eat in", "eat-in", "eat on", "eat-in", "restaurant", "dine", "hot food", "hot drink"],
+    text:
+`CATEGORY: FOOD & DRINK - EAT-IN VS TAKEAWAY (CATERING)
+- Core split: Eat-in / on-premises is normally catering => standard-rated.
+- Takeaway can be zero-rated for many cold basic foods, but becomes standard-rated if it is catering or treated as hot takeaway.
+- Hot takeaway: focus on whether the food/drink is supplied hot (heated for consumption, kept hot, or marketed as hot).
+- Drinks: tea/coffee and most beverages are standard-rated in practice (especially where supplied as part of a cafe service).`
+  },
+
+  {
+    id: "animal_feed",
+    title: "ANIMAL FEED & BIRD SEED",
+    keywords: ["bird", "seed", "feed", "dog", "cat", "pigeon", "poultry", "animal", "pet food", "sack", "bag", "12.5kg", "12.5 kg", "straight feed", "peanuts", "sunflower"],
+    text:
+`CATEGORY: ANIMAL FEED & BIRD SEED
+- Bulk / large pack size rules can change outcomes for some bird/straight feeds.
+- Separate "working / farm / production animals" from retail pet food.
+- Identify: straight feed vs prepared pet food; pack size; how it is held out for sale; intended animal use.`
+  },
+
+  {
+    id: "snacks_confectionery",
+    title: "SNACKS, CONFECTIONERY, CAKES & BISCUITS",
+    keywords: ["crisp", "crisps", "chip", "snack", "chocolate", "sweet", "biscuit", "biscuits", "cake", "cakes", "jaffa", "confectionery"],
+    text:
+`CATEGORY: SNACKS & CONFECTIONERY
+- Separate: basic food (often zero-rated) vs confectionery/savoury snacks (often standard-rated).
+- Cakes vs biscuits rules can be decisive (including chocolate coating questions).`
+  },
+
+  {
+    id: "drinks",
+    title: "DRINKS (HOT/COLD, MILK-BASED, SMOOTHIES)",
+    keywords: ["drink", "drinks", "tea", "coffee", "latte", "cappuccino", "smoothie", "milkshake", "juice", "water", "cola", "soda"],
+    text:
+`CATEGORY: DRINKS
+- For cafes: tea/coffee served as drinks are standard-rated (eat-in and usually takeaway).
+- Many cold beverages are also standard-rated.
+- If the question involves milk or milk-based drinks, be precise: product type, how prepared, and whether supplied as part of catering.`
+  },
+
+  {
+    id: "hot_food",
+    title: "HOT FOOD / HOT TAKEAWAY / BAKERY",
+    keywords: ["hot", "heated", "warm", "kept hot", "baked", "oven", "sausage roll", "pie", "pasty", "pizza", "burger", "fries"],
+    text:
+`CATEGORY: HOT FOOD & BAKERY
+- Key issue: supplied hot, heated for consumption, kept hot, or marketed as hot.
+- Bakery items can be complex: whether they are simply cooling vs actively kept hot / intended to be eaten hot.`
   }
+];
 
-  function renderSources(sources){
-    currentSources = uniqSources(sources);
-    sourcesListEl.innerHTML = "";
-    if(!currentSources.length){
-      const p = document.createElement("p");
-      p.className = "srcMeta";
-      p.textContent = "No sources supplied.";
-      sourcesListEl.appendChild(p);
-      return;
-    }
-    for(const s of currentSources){
-      const card = document.createElement("div");
-      card.className = "srcItem";
+// Find matches (dedupe by id)
+const matched = [];
+const seen = new Set();
 
-      const t = document.createElement("p");
-      t.className = "srcTitle";
-      t.textContent = (s.doc_id ? (s.doc_id + ": ") : "") + (s.title || "Source");
-      card.appendChild(t);
+for (const b of BLOCKS) {
+  const hit = b.keywords.some(k => q.includes(k));
+  if (hit && !seen.has(b.id)) {
+    seen.add(b.id);
+    matched.push(b);
+  }
+}
 
-      const m = document.createElement("p");
-      m.className = "srcMeta";
-      const lines = [];
-      if(s.chunk_index !== undefined && s.chunk_index !== null) lines.push("chunk_index: " + s.chunk_index);
-      if(s.id) lines.push("id: " + s.id);
-      if(s.source_url) lines.push("url: " + s.source_url);
-      m.textContent = lines.join("\n");
-      card.appendChild(m);
+// If nothing matched, keep a small general block
+let primer = "";
+let keys = [];
 
-      sourcesListEl.appendChild(card);
+if (!matched.length) {
+  primer =
+`GENERAL VAT PRINCIPLES (HIGH LEVEL)
+- Distinguish: basic food vs catering vs hot takeaway vs confectionery/snacks vs drinks.
+- If the context is unclear, ask one targeted follow-up (product + eat-in/takeaway + served hot/cold).`;
+  keys = ["general"];
+} else {
+  primer = matched.map(b => `**${b.title}**\n${b.text}`).join("\n\n");
+  keys = matched.map(b => b.id);
+}
+
+return [
+  {
+    json: {
+      question,
+      nuance_primer: primer,
+      nuance_keys: keys
     }
   }
-
-  function setFont(px){
-    fontPx = Math.max(10, Math.min(22, px));
-    document.documentElement.style.setProperty("--mmFont", fontPx + "px");
-  }
-
-  function destroyMap(){
-    if(mm && typeof mm.destroy === "function"){
-      try{ mm.destroy(); } catch(e){}
-    }
-    mm = null;
-  }
-
-  function createMap(data){
-    destroyMap();
-    const svg = document.getElementById("svg");
-    svg.innerHTML = "";
-    mm = window.markmap.Markmap.create(svg, {
-      autoFit: true,
-      duration: 200,
-      initialExpandLevel: expandLevel
-    }, data);
-
-    // Fit once now, then again after fonts settle
-    try{ mm.fit(); } catch(e){}
-    setTimeout(()=> { try{ mm.fit(); } catch(e){} }, 120);
-  }
-
-  function renderMarkdown(md){
-    if(!transformer){
-      showToast("Transformer not ready.");
-      return;
-    }
-    currentMarkdown = String(md || "");
-    const { root } = transformer.transform(currentMarkdown);
-    currentData = root;
-    createMap(currentData);
-    setStatus("Ready");
-  }
-
-  // --- robust script loader (tries multiple CDNs) ---
-  function loadScript(url){
-    return new Promise((resolve, reject)=>{
-      const s = document.createElement("script");
-      s.src = url;
-      s.async = true;
-      s.onload = ()=> resolve(url);
-      s.onerror = ()=> reject(new Error("Failed: " + url));
-      document.head.appendChild(s);
-    });
-  }
-
-  async function loadLibraries(){
-    setStatus("Loading libraries…");
-
-    // D3
-    const d3Candidates = [
-      "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js",
-      "https://unpkg.com/d3@7/dist/d3.min.js"
-    ];
-    let ok = false;
-    for(const u of d3Candidates){
-      try{ await loadScript(u); ok = true; break; } catch(e){}
-    }
-    if(!ok) throw new Error("Could not load D3 from any CDN.");
-
-    // markmap-lib
-    const libCandidates = [
-      "https://cdn.jsdelivr.net/npm/markmap-lib@0.17.0/dist/browser/index.min.js",
-      "https://unpkg.com/markmap-lib@0.17.0/dist/browser/index.min.js"
-    ];
-    ok = false;
-    for(const u of libCandidates){
-      try{ await loadScript(u); ok = true; break; } catch(e){}
-    }
-    if(!ok) throw new Error("Could not load markmap-lib from any CDN.");
-
-    // markmap-view
-    const viewCandidates = [
-      "https://cdn.jsdelivr.net/npm/markmap-view@0.17.0/dist/browser/index.min.js",
-      "https://unpkg.com/markmap-view@0.17.0/dist/browser/index.min.js"
-    ];
-    ok = false;
-    for(const u of viewCandidates){
-      try{ await loadScript(u); ok = true; break; } catch(e){}
-    }
-    if(!ok) throw new Error("Could not load markmap-view from any CDN.");
-
-    transformer = new window.markmap.Transformer();
-
-    setStatus("Ready (no content)");
-    btnFit.disabled = false;
-    btnSources.disabled = false;
-    btnPaste.disabled = false;
-    btnClear.disabled = false;
-    btnDepthDown.disabled = false;
-    btnDepthUp.disabled = false;
-    btnFontDown.disabled = false;
-    btnFontUp.disabled = false;
-
-    setFont(fontPx);
-  }
-
-  // --- UI handlers ---
-  btnSources.addEventListener("click", ()=>{
-    wrapEl.classList.toggle("showSources");
-  });
-  btnFit.addEventListener("click", ()=>{
-    if(mm){ try{ mm.fit(); } catch(e){} }
-  });
-
-  btnDepthDown.addEventListener("click", ()=>{
-    expandLevel = Math.max(1, expandLevel - 1);
-    if(currentData) createMap(currentData);
-    showToast("Initial expand depth: " + expandLevel);
-  });
-  btnDepthUp.addEventListener("click", ()=>{
-    expandLevel = Math.min(12, expandLevel + 1);
-    if(currentData) createMap(currentData);
-    showToast("Initial expand depth: " + expandLevel);
-  });
-
-  btnFontDown.addEventListener("click", ()=>{
-    setFont(fontPx - 1);
-    if(mm){ try{ mm.fit(); } catch(e){} }
-  });
-  btnFontUp.addEventListener("click", ()=>{
-    setFont(fontPx + 1);
-    if(mm){ try{ mm.fit(); } catch(e){} }
-  });
-
-  btnPaste.addEventListener("click", ()=>{
-    modalEl.style.display = "flex";
-    mdInput.value = currentMarkdown || "";
-    mdInput.focus();
-  });
-  btnCancel.addEventListener("click", ()=>{
-    modalEl.style.display = "none";
-  });
-  btnRender.addEventListener("click", ()=>{
-    modalEl.style.display = "none";
-    renderMarkdown(mdInput.value);
-  });
-
-  btnClear.addEventListener("click", ()=>{
-    currentMarkdown = "";
-    currentData = null;
-    destroyMap();
-    document.getElementById("svg").innerHTML = "";
-    setStatus("Ready (no content)");
-  });
-
-  window.addEventListener("resize", ()=>{
-    if(mm){ try{ mm.fit(); } catch(e){} }
-  });
-
-  // --- Accept content from Squarespace via postMessage ---
-  window.addEventListener("message", (ev)=>{
-    const msg = ev && ev.data ? ev.data : null;
-    if(!msg || typeof msg !== "object") return;
-
-    // expected:
-    // { type: "vat_mindmap", markdown: "...", sources: [...], title: "..." }
-    if(msg.type !== "vat_mindmap") return;
-
-    try{
-      if(msg.title && typeof msg.title === "string"){
-        document.title = msg.title;
-      }
-      if(Array.isArray(msg.sources)) renderSources(msg.sources);
-      if(typeof msg.markdown === "string" && msg.markdown.trim()){
-        renderMarkdown(msg.markdown);
-      } else {
-        setStatus("Ready (no content)");
-      }
-    } catch(e){
-      setStatus("Error");
-      showToast("Failed to render message: " + (e && e.message ? e.message : String(e)));
-    }
-  });
-
-  // If someone opens the viewer directly, allow manual paste.
-  // You can also add a small demo here if you want, but leaving blank is safer.
-
-  loadLibraries().catch(err=>{
-    setStatus("Library load failed");
-    showToast(String(err && err.message ? err.message : err));
-  });
-
-})();
-</script>
-</body>
-</html>
+];
