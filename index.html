@@ -1,123 +1,286 @@
-// Nuance Query Generator (deduped, multi-match, ASCII-only)
-
-function safeNodeJson(name) {
-  try {
-    const v = $(name).item.json;
-    return (v && typeof v === "object") ? v : {};
-  } catch (e) {
-    return {};
-  }
-}
-
-const webhook = safeNodeJson("Webhook");
-const carry = safeNodeJson("Carry on Question");
-const prior = safeNodeJson("Nuance Query Generator"); // if re-running
-
-const body = (webhook.body && typeof webhook.body === "object") ? webhook.body : {};
-const query = (webhook.query && typeof webhook.query === "object") ? webhook.query : {};
-
-const rawQuestion =
-  webhook.question ||
-  webhook.text ||
-  body.question ||
-  query.question ||
-  carry.question ||
-  prior.question ||
-  "";
-
-const question = String(rawQuestion || "").replace(/^[=\uFEFF\s]+/, "").trim();
-const q = question.toLowerCase();
-
-// Rule blocks (keep them short, decision-focused; let Pinecone context do the heavy lifting)
-const BLOCKS = [
-  {
-    id: "food_takeaway_vs_eatin",
-    title: "FOOD & DRINK - EAT-IN VS TAKEAWAY (CATERING RULES)",
-    keywords: ["cafe", "café", "coffee shop", "sandwich", "takeaway", "eat in", "eat-in", "eat on", "eat-in", "restaurant", "dine", "hot food", "hot drink"],
-    text:
-`CATEGORY: FOOD & DRINK - EAT-IN VS TAKEAWAY (CATERING)
-- Core split: Eat-in / on-premises is normally catering => standard-rated.
-- Takeaway can be zero-rated for many cold basic foods, but becomes standard-rated if it is catering or treated as hot takeaway.
-- Hot takeaway: focus on whether the food/drink is supplied hot (heated for consumption, kept hot, or marketed as hot).
-- Drinks: tea/coffee and most beverages are standard-rated in practice (especially where supplied as part of a cafe service).`
-  },
-
-  {
-    id: "animal_feed",
-    title: "ANIMAL FEED & BIRD SEED",
-    keywords: ["bird", "seed", "feed", "dog", "cat", "pigeon", "poultry", "animal", "pet food", "sack", "bag", "12.5kg", "12.5 kg", "straight feed", "peanuts", "sunflower"],
-    text:
-`CATEGORY: ANIMAL FEED & BIRD SEED
-- Bulk / large pack size rules can change outcomes for some bird/straight feeds.
-- Separate "working / farm / production animals" from retail pet food.
-- Identify: straight feed vs prepared pet food; pack size; how it is held out for sale; intended animal use.`
-  },
-
-  {
-    id: "snacks_confectionery",
-    title: "SNACKS, CONFECTIONERY, CAKES & BISCUITS",
-    keywords: ["crisp", "crisps", "chip", "snack", "chocolate", "sweet", "biscuit", "biscuits", "cake", "cakes", "jaffa", "confectionery"],
-    text:
-`CATEGORY: SNACKS & CONFECTIONERY
-- Separate: basic food (often zero-rated) vs confectionery/savoury snacks (often standard-rated).
-- Cakes vs biscuits rules can be decisive (including chocolate coating questions).`
-  },
-
-  {
-    id: "drinks",
-    title: "DRINKS (HOT/COLD, MILK-BASED, SMOOTHIES)",
-    keywords: ["drink", "drinks", "tea", "coffee", "latte", "cappuccino", "smoothie", "milkshake", "juice", "water", "cola", "soda"],
-    text:
-`CATEGORY: DRINKS
-- For cafes: tea/coffee served as drinks are standard-rated (eat-in and usually takeaway).
-- Many cold beverages are also standard-rated.
-- If the question involves milk or milk-based drinks, be precise: product type, how prepared, and whether supplied as part of catering.`
-  },
-
-  {
-    id: "hot_food",
-    title: "HOT FOOD / HOT TAKEAWAY / BAKERY",
-    keywords: ["hot", "heated", "warm", "kept hot", "baked", "oven", "sausage roll", "pie", "pasty", "pizza", "burger", "fries"],
-    text:
-`CATEGORY: HOT FOOD & BAKERY
-- Key issue: supplied hot, heated for consumption, kept hot, or marketed as hot.
-- Bakery items can be complex: whether they are simply cooling vs actively kept hot / intended to be eaten hot.`
-  }
-];
-
-// Find matches (dedupe by id)
-const matched = [];
-const seen = new Set();
-
-for (const b of BLOCKS) {
-  const hit = b.keywords.some(k => q.includes(k));
-  if (hit && !seen.has(b.id)) {
-    seen.add(b.id);
-    matched.push(b);
-  }
-}
-
-// If nothing matched, keep a small general block
-let primer = "";
-let keys = [];
-
-if (!matched.length) {
-  primer =
-`GENERAL VAT PRINCIPLES (HIGH LEVEL)
-- Distinguish: basic food vs catering vs hot takeaway vs confectionery/snacks vs drinks.
-- If the context is unclear, ask one targeted follow-up (product + eat-in/takeaway + served hot/cold).`;
-  keys = ["general"];
-} else {
-  primer = matched.map(b => `**${b.title}**\n${b.text}`).join("\n\n");
-  keys = matched.map(b => b.id);
-}
-
-return [
-  {
-    json: {
-      question,
-      nuance_primer: primer,
-      nuance_keys: keys
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>VAT Mindmap Viewer</title>
+  <style>
+    :root{
+      --bg1:#07101c;
+      --bg2:#0b213c;
+      --panel:#0b1220cc;
+      --border:rgba(255,255,255,.10);
+      --text:#e7edf6;
+      --muted:rgba(231,237,246,.70);
+      --mm-font:16px;
     }
-  }
-];
+    html, body { height: 100%; margin: 0; }
+    body{
+      background: radial-gradient(1200px 600px at 20% 10%, rgba(30,80,140,.35), transparent),
+                  radial-gradient(900px 500px at 80% 40%, rgba(10,40,90,.35), transparent),
+                  linear-gradient(135deg,var(--bg1),var(--bg2));
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    .topbar{
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 54px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 12px;
+      background: rgba(5,10,18,.65);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      z-index: 10;
+    }
+    .title{
+      font-weight: 700;
+      letter-spacing: .2px;
+      opacity: .95;
+    }
+    .badge{
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+      user-select: none;
+    }
+    .badge.ok{ color: #b8ffcc; border-color: rgba(184,255,204,.25); }
+    .badge.bad{ color: #ffb8b8; border-color: rgba(255,184,184,.25); }
+    .spacer{ flex: 1; }
+
+    .btn{
+      appearance: none;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .btn:hover{ background: rgba(255,255,255,.10); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.danger{ border-color: rgba(255,100,100,.30); }
+
+    .main{
+      position: absolute; inset: 54px 0 0 0;
+      display: flex;
+      min-height: 0;
+    }
+
+    .panel{
+      width: 340px;
+      max-width: 42vw;
+      background: rgba(5,10,18,.55);
+      border-right: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      padding: 12px 12px 14px;
+      overflow: auto;
+    }
+    .panel.hidden{ display: none; }
+    .panel h3{
+      margin: 8px 0 6px;
+      font-size: 13px;
+      letter-spacing: .2px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .panel .hint{
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 10px;
+      line-height: 1.35;
+    }
+    .sourcesCount{
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    #sourcesList{
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 10px;
+    }
+    #sourcesList li{
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      border-radius: 12px;
+      padding: 10px 10px;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .canvasWrap{
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+    }
+    svg#mindmap{
+      width: 100%;
+      height: 100%;
+      display: block;
+      font-size: var(--mm-font);
+    }
+
+    .empty{
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: rgba(231,237,246,.55);
+      font-size: 14px;
+      padding: 24px;
+      pointer-events: none;
+    }
+    .empty.show{ display: flex; }
+
+    .toast{
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      max-width: min(900px, calc(100vw - 24px));
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: rgba(231,237,246,.85);
+      font-size: 12px;
+      line-height: 1.35;
+      backdrop-filter: blur(10px);
+      display: none;
+      z-index: 20;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .toast.show{ display: block; }
+
+    .modal{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 30;
+    }
+    .modal.show{ display: flex; }
+    .modalCard{
+      width: min(980px, 100%);
+      height: min(520px, 80vh);
+      background: rgba(8,14,24,.92);
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modalHeader{
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .modalHeader .title2{
+      font-weight: 700;
+      font-size: 13px;
+      opacity: .9;
+    }
+    .modalBody{
+      padding: 12px;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    textarea{
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      resize: none;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding: 10px 10px;
+      font-size: 13px;
+      line-height: 1.35;
+      outline: none;
+    }
+    .modalFooter{
+      padding: 10px 12px;
+      border-top: 1px solid rgba(255,255,255,.10);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <div class="title">VAT Mindmap</div>
+    <div id="status" class="badge">Loading libraries…</div>
+    <div class="spacer"></div>
+    <button class="btn" id="fitBtn">Fit</button>
+    <button class="btn" id="depthDownBtn">- Depth</button>
+    <button class="btn" id="depthUpBtn">+ Depth</button>
+    <button class="btn" id="fontDownBtn">- Font</button>
+    <button class="btn" id="fontUpBtn">+ Font</button>
+    <button class="btn" id="sourcesBtn">Sources</button>
+    <button class="btn" id="pasteBtn">Paste</button>
+    <button class="btn danger" id="clearBtn">Clear</button>
+  </div>
+
+  <div class="main">
+    <aside id="sourcesPanel" class="panel hidden">
+      <h3>Verified sources</h3>
+      <div class="sourcesCount"><span id="sourcesCount">0</span> source(s)</div>
+      <ul id="sourcesList"></ul>
+      <div class="hint">
+        Tip: this panel is populated when your Squarespace overlay (or n8n) sends a <code>sources</code> list via postMessage.
+      </div>
+    </aside>
+
+    <div class="canvasWrap">
+      <svg id="mindmap"></svg>
+      <div id="empty" class="empty show">Waiting for content…</div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <div id="modal" class="modal">
+    <div class="modalCard">
+      <div class="modalHeader">
+        <div class="title2">Paste Markmap markdown</div>
+        <div class="spacer"></div>
+        <button class="btn" id="modalCloseBtn">Close</button>
+      </div>
+      <div class="modalBody">
+        <textarea id="mdInput" placeholder="# VAT&#10;## Zero-rated&#10;- Animal feed&#10;  - Working animals&#10;## Standard-rated&#10;- Pet food"></textarea>
+        <div style="color:rgba(231,237,246,.65); font-size:12px;">
+          Use headings and bullet lists. Deeper bullet nesting = deeper mindmap levels.
+        </div>
+      </div>
+      <div class="modalFooter">
+        <button class="btn" id="renderBtn">Render</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Multi-CDN fallback loader (prevents "Library load failed" if one CDN is
