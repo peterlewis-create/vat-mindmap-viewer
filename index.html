@@ -1,286 +1,63 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>VAT Mindmap Viewer</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VAT Mindmap</title>
   <style>
-    :root{
-      --bg1:#07101c;
-      --bg2:#0b213c;
-      --panel:#0b1220cc;
-      --border:rgba(255,255,255,.10);
-      --text:#e7edf6;
-      --muted:rgba(231,237,246,.70);
-      --mm-font:16px;
-    }
-    html, body { height: 100%; margin: 0; }
-    body{
-      background: radial-gradient(1200px 600px at 20% 10%, rgba(30,80,140,.35), transparent),
-                  radial-gradient(900px 500px at 80% 40%, rgba(10,40,90,.35), transparent),
-                  linear-gradient(135deg,var(--bg1),var(--bg2));
-      color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      overflow: hidden;
-    }
-
-    .topbar{
-      position: fixed; top: 0; left: 0; right: 0;
-      height: 54px;
-      display: flex; align-items: center; gap: 10px;
-      padding: 0 12px;
-      background: rgba(5,10,18,.65);
-      border-bottom: 1px solid var(--border);
-      backdrop-filter: blur(10px);
-      z-index: 10;
-    }
-    .title{
-      font-weight: 700;
-      letter-spacing: .2px;
-      opacity: .95;
-    }
-    .badge{
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,.06);
-      color: var(--muted);
-      user-select: none;
-    }
-    .badge.ok{ color: #b8ffcc; border-color: rgba(184,255,204,.25); }
-    .badge.bad{ color: #ffb8b8; border-color: rgba(255,184,184,.25); }
-    .spacer{ flex: 1; }
-
-    .btn{
-      appearance: none;
-      border: 1px solid rgba(255,255,255,.16);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      padding: 7px 10px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 13px;
-      user-select: none;
-      white-space: nowrap;
-    }
-    .btn:hover{ background: rgba(255,255,255,.10); }
-    .btn:active{ transform: translateY(1px); }
-    .btn.danger{ border-color: rgba(255,100,100,.30); }
-
-    .main{
-      position: absolute; inset: 54px 0 0 0;
-      display: flex;
-      min-height: 0;
-    }
-
-    .panel{
-      width: 340px;
-      max-width: 42vw;
-      background: rgba(5,10,18,.55);
-      border-right: 1px solid var(--border);
-      backdrop-filter: blur(10px);
-      padding: 12px 12px 14px;
-      overflow: auto;
-    }
-    .panel.hidden{ display: none; }
-    .panel h3{
-      margin: 8px 0 6px;
-      font-size: 13px;
-      letter-spacing: .2px;
-      color: var(--muted);
-      text-transform: uppercase;
-    }
-    .panel .hint{
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 10px;
-      line-height: 1.35;
-    }
-    .sourcesCount{
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-    #sourcesList{
-      list-style: none;
-      padding: 0;
+    body {
       margin: 0;
-      display: grid;
-      gap: 10px;
-    }
-    #sourcesList li{
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.06);
-      border-radius: 12px;
-      padding: 10px 10px;
-      font-size: 13px;
-      line-height: 1.35;
-    }
-
-    .canvasWrap{
-      position: relative;
-      flex: 1;
-      min-width: 0;
-      height: 100%;
-    }
-    svg#mindmap{
-      width: 100%;
-      height: 100%;
-      display: block;
-      font-size: var(--mm-font);
-    }
-
-    .empty{
-      position: absolute;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      color: rgba(231,237,246,.55);
-      font-size: 14px;
-      padding: 24px;
-      pointer-events: none;
-    }
-    .empty.show{ display: flex; }
-
-    .toast{
-      position: fixed;
-      left: 12px;
-      bottom: 12px;
-      max-width: min(900px, calc(100vw - 24px));
-      background: rgba(0,0,0,.35);
-      border: 1px solid rgba(255,255,255,.16);
-      border-radius: 12px;
-      padding: 10px 12px;
-      color: rgba(231,237,246,.85);
-      font-size: 12px;
-      line-height: 1.35;
-      backdrop-filter: blur(10px);
-      display: none;
-      z-index: 20;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .toast.show{ display: block; }
-
-    .modal{
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.55);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 18px;
-      z-index: 30;
-    }
-    .modal.show{ display: flex; }
-    .modalCard{
-      width: min(980px, 100%);
-      height: min(520px, 80vh);
-      background: rgba(8,14,24,.92);
-      border: 1px solid rgba(255,255,255,.16);
-      border-radius: 16px;
-      display: flex;
-      flex-direction: column;
+      background: radial-gradient(circle at center, #0d1b2a, #000);
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
     }
-    .modalHeader{
-      padding: 10px 12px;
-      border-bottom: 1px solid rgba(255,255,255,.10);
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    #mindmap {
+      width: 100vw;
+      height: 100vh;
     }
-    .modalHeader .title2{
-      font-weight: 700;
-      font-size: 13px;
-      opacity: .9;
-    }
-    .modalBody{
-      padding: 12px;
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    textarea{
+    #header {
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 100%;
-      flex: 1;
-      min-height: 0;
-      resize: none;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      padding: 10px 10px;
-      font-size: 13px;
-      line-height: 1.35;
-      outline: none;
-    }
-    .modalFooter{
-      padding: 10px 12px;
-      border-top: 1px solid rgba(255,255,255,.10);
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 8px 12px;
+      font-weight: bold;
+      z-index: 10;
+      border-bottom: 1px solid #00aaff;
     }
   </style>
 </head>
 
 <body>
-  <div class="topbar">
-    <div class="title">VAT Mindmap</div>
-    <div id="status" class="badge">Loading libraries…</div>
-    <div class="spacer"></div>
-    <button class="btn" id="fitBtn">Fit</button>
-    <button class="btn" id="depthDownBtn">- Depth</button>
-    <button class="btn" id="depthUpBtn">+ Depth</button>
-    <button class="btn" id="fontDownBtn">- Font</button>
-    <button class="btn" id="fontUpBtn">+ Font</button>
-    <button class="btn" id="sourcesBtn">Sources</button>
-    <button class="btn" id="pasteBtn">Paste</button>
-    <button class="btn danger" id="clearBtn">Clear</button>
-  </div>
+  <div id="header">VAT Mindmap</div>
+  <svg id="mindmap"></svg>
 
-  <div class="main">
-    <aside id="sourcesPanel" class="panel hidden">
-      <h3>Verified sources</h3>
-      <div class="sourcesCount"><span id="sourcesCount">0</span> source(s)</div>
-      <ul id="sourcesList"></ul>
-      <div class="hint">
-        Tip: this panel is populated when your Squarespace overlay (or n8n) sends a <code>sources</code> list via postMessage.
-      </div>
-    </aside>
-
-    <div class="canvasWrap">
-      <svg id="mindmap"></svg>
-      <div id="empty" class="empty show">Waiting for content…</div>
-    </div>
-  </div>
-
-  <div id="toast" class="toast"></div>
-
-  <div id="modal" class="modal">
-    <div class="modalCard">
-      <div class="modalHeader">
-        <div class="title2">Paste Markmap markdown</div>
-        <div class="spacer"></div>
-        <button class="btn" id="modalCloseBtn">Close</button>
-      </div>
-      <div class="modalBody">
-        <textarea id="mdInput" placeholder="# VAT&#10;## Zero-rated&#10;- Animal feed&#10;  - Working animals&#10;## Standard-rated&#10;- Pet food"></textarea>
-        <div style="color:rgba(231,237,246,.65); font-size:12px;">
-          Use headings and bullet lists. Deeper bullet nesting = deeper mindmap levels.
-        </div>
-      </div>
-      <div class="modalFooter">
-        <button class="btn" id="renderBtn">Render</button>
-      </div>
-    </div>
-  </div>
+  <!-- Load D3 and Markmap (stable versions) -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17.3/dist/browser/index.min.js"></script>
 
   <script>
-    // Multi-CDN fallback loader (prevents "Library load failed" if one CDN is
+    // Confirm libraries loaded
+    console.log("D3 loaded:", typeof d3 !== "undefined");
+    console.log("Markmap object:", window.markmap);
+
+    const { Markmap, Transformer } = window.markmap;
+    const transformer = new Transformer();
+
+    const md = `
+# VAT
+## Animal feed
+- Pet food exceptions
+- Working animals
+## Food & drink
+- Catering rules
+- Takeaway vs eat-in
+`;
+
+    const { root } = transformer.transform(md);
+    Markmap.create("#mindmap", { initialExpandLevel: 2 }, root);
+  </script>
+</body>
+</html>
