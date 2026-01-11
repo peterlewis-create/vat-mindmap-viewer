@@ -7,388 +7,627 @@
 
   <style>
     :root{
-      --bg: #0b1220;
-      --panel: rgba(7,12,22,.92);
-      --panel2: rgba(255,255,255,.06);
-      --border: rgba(255,255,255,.10);
-      --text: #e5e7eb;
-      --muted: rgba(229,231,235,.70);
-      --danger: #ef4444;
+      --bg0:#07121b;
+      --bg1:#0b1a27;
+      --panel:#0b1620cc;
+      --panel2:#0b1620f0;
+      --text:#e5eef7;
+      --muted:#a9b7c6;
+      --line:rgba(255,255,255,.10);
+      --btn:rgba(255,255,255,.06);
+      --btnH:rgba(255,255,255,.10);
+      --danger:#ff6b6b;
+      --ok:#6ee7b7;
+      --warn:#fbbf24;
     }
 
     html, body { height: 100%; margin: 0; }
-    body{
-      background: var(--bg);
+    body {
+      background: radial-gradient(1200px 700px at 20% 30%, #0d2233 0%, var(--bg0) 55%, #061019 100%);
       color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       overflow: hidden;
     }
 
     .topbar{
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      height: 52px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 0 12px;
-      background: var(--panel);
-      border-bottom: 1px solid rgba(255,255,255,.08);
-      z-index: 10;
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 56px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 14px;
+      background: linear-gradient(to bottom, rgba(10,20,30,.90), rgba(10,20,30,.70));
+      border-bottom: 1px solid var(--line);
+      z-index: 50;
+      backdrop-filter: blur(8px);
     }
 
     .title{
-      font-weight: 650;
-      letter-spacing: .2px;
-      opacity: .95;
+      font-weight: 700;
+      letter-spacing: .3px;
       white-space: nowrap;
     }
 
-    .pill{
+    .status{
       font-size: 12px;
       color: var(--muted);
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.04);
-      padding: 4px 8px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
       border-radius: 999px;
+      background: rgba(255,255,255,.04);
       white-space: nowrap;
-      max-width: 42vw;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
+    .status.ok { color: var(--ok); border-color: rgba(110,231,183,.35); }
+    .status.warn { color: var(--warn); border-color: rgba(251,191,36,.35); }
+    .status.bad { color: var(--danger); border-color: rgba(255,107,107,.35); }
 
     .spacer{ flex: 1; }
 
     .btn{
       appearance: none;
-      border: 1px solid rgba(255,255,255,.16);
-      background: rgba(255,255,255,.06);
+      border: 1px solid var(--line);
+      background: var(--btn);
       color: var(--text);
-      padding: 8px 10px;
+      padding: 7px 10px;
       border-radius: 10px;
       cursor: pointer;
       font-size: 13px;
-      line-height: 1;
-      user-select: none;
     }
-    .btn:hover{ background: rgba(255,255,255,.10); }
+    .btn:hover{ background: var(--btnH); }
+    .btn:active{ transform: translateY(1px); }
 
     .stage{
       position: fixed;
-      top: 52px; left: 0; right: 0; bottom: 0;
+      top: 56px; left: 0; right: 0; bottom: 0;
+      display: grid;
+      grid-template-columns: 0px 1fr;
+      transition: grid-template-columns .18s ease;
+    }
+    .stage.sources-open{
+      grid-template-columns: 360px 1fr;
     }
 
-    svg#mindmap{
+    .sources{
+      height: 100%;
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+    }
+
+    .sources-inner{
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sources-header{
+      padding: 12px 12px 8px 12px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel2);
+    }
+    .sources-list{
+      padding: 10px 12px 14px 12px;
+      overflow: auto;
+      flex: 1;
+    }
+
+    .src-card{
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      border-radius: 12px;
+      padding: 10px 10px;
+      margin-bottom: 10px;
+    }
+    .src-title{
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 4px;
+      line-height: 1.25;
+    }
+    .src-meta{
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .src-link{
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #b7dbff;
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(183,219,255,.35);
+    }
+    .src-link:hover{ opacity: .9; }
+
+    .canvas{
+      position: relative;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #svg {
       width: 100%;
       height: 100%;
       display: block;
-      background: radial-gradient(1200px 800px at 30% 20%, rgba(255,255,255,.06), transparent 60%),
-                  radial-gradient(900px 600px at 70% 70%, rgba(255,255,255,.05), transparent 55%),
-                  var(--bg);
     }
 
-    /* Make dense maps more readable */
-    .markmap-node text{ font-size: 13px; }
-    .markmap-node circle{ r: 5; }
-
-    .panel{
-      position: fixed;
-      top: 60px;
-      right: 12px;
-      width: min(520px, calc(100vw - 24px));
-      max-height: calc(100vh - 72px);
-      background: rgba(7,12,22,.96);
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 14px;
-      padding: 12px;
-      z-index: 20;
+    .center-overlay{
+      position: absolute;
+      inset: 0;
       display: none;
-      overflow: auto;
-      box-shadow: 0 18px 50px rgba(0,0,0,.45);
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      pointer-events: none;
     }
 
-    .panel h3{
-      margin: 0 0 10px 0;
+    .center-overlay.show{ display: flex; }
+
+    .card{
+      pointer-events: auto;
+      max-width: 860px;
+      width: 100%;
+      border: 1px solid var(--line);
+      background: rgba(10,20,30,.65);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    }
+
+    .card h3{
+      margin: 0 0 8px 0;
       font-size: 14px;
       letter-spacing: .2px;
-      opacity: .95;
+    }
+
+    .card p{
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .mono{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      color: #d6e2ee;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    /* Paste modal */
+    .modal{
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(6px);
+      z-index: 20;
+    }
+    .modal.show{ display: flex; }
+    .modal-card{
+      width: min(980px, calc(100% - 22px));
+      border: 1px solid var(--line);
+      background: rgba(10,20,30,.90);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 18px 60px rgba(0,0,0,.45);
+    }
+    .modal-head{
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
     }
-
-    .panel .close{
-      border: 1px solid rgba(255,255,255,.16);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      border-radius: 10px;
-      padding: 6px 8px;
-      cursor: pointer;
-      font-size: 12px;
+    .modal-head .label{
+      font-weight: 700;
+      font-size: 13px;
     }
-
-    .src{
-      border: 1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.04);
-      border-radius: 12px;
-      padding: 10px;
-      margin-bottom: 10px;
+    .modal-body{
+      padding: 12px;
     }
-    .src .t{ font-weight: 650; font-size: 13px; margin-bottom: 4px; }
-    .src .m{ color: var(--muted); font-size: 12px; line-height: 1.35; }
-    .src a{ color: #93c5fd; text-decoration: none; }
-    .src a:hover{ text-decoration: underline; }
-
     textarea{
       width: 100%;
-      min-height: 240px;
-      resize: vertical;
+      height: min(56vh, 520px);
       border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
       color: var(--text);
       padding: 10px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
       font-size: 12px;
       line-height: 1.4;
+      resize: vertical;
       outline: none;
     }
-
-    .row{
+    .modal-foot{
       display: flex;
       gap: 10px;
       justify-content: flex-end;
-      margin-top: 10px;
-      flex-wrap: wrap;
+      padding: 10px 12px 12px 12px;
+      border-top: 1px solid var(--line);
     }
 
-    .error{
-      display: none;
-      position: fixed;
-      left: 12px;
-      bottom: 12px;
-      right: 12px;
-      max-width: 980px;
-      background: rgba(127,29,29,.95);
-      border: 1px solid rgba(255,255,255,.20);
-      color: #fee2e2;
-      padding: 10px 12px;
-      border-radius: 12px;
-      z-index: 30;
-      box-shadow: 0 18px 50px rgba(0,0,0,.45);
-      font-size: 13px;
+    /* Markmap font sizing for deeper trees */
+    .markmap {
+      font: 12px/1.35 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
   </style>
-
-  <!-- Libraries (CDN is fine on GitHub Pages) -->
-  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.17.0/dist/browser/index.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17.0/dist/browser/index.min.js"></script>
 </head>
 
 <body>
   <div class="topbar">
     <div class="title">VAT Mindmap</div>
-    <div id="status" class="pill">Waiting for content…</div>
+    <div id="status" class="status">Loading viewer…</div>
     <div class="spacer"></div>
+
     <button class="btn" id="btnFit">Fit</button>
     <button class="btn" id="btnSources">Sources</button>
     <button class="btn" id="btnPaste">Paste</button>
     <button class="btn" id="btnClear">Clear</button>
   </div>
 
-  <div class="stage">
-    <svg id="mindmap"></svg>
-  </div>
+  <div id="stage" class="stage">
+    <aside class="sources" aria-label="Verified sources">
+      <div class="sources-inner">
+        <div class="sources-header">Verified sources</div>
+        <div id="sourcesList" class="sources-list"></div>
+      </div>
+    </aside>
 
-  <div class="panel" id="sourcesPanel">
-    <h3>
-      Verified Sources
-      <button class="close" id="closeSources">Close</button>
-    </h3>
-    <div id="sourcesList"></div>
-  </div>
+    <main class="canvas">
+      <svg id="svg"></svg>
 
-  <div class="panel" id="pastePanel">
-    <h3>
-      Paste mindmap markdown
-      <button class="close" id="closePaste">Close</button>
-    </h3>
-    <textarea id="pasteText" placeholder="# VAT&#10;- Animal feed&#10;  - Pet food exceptions&#10;  - Working animals"></textarea>
-    <div class="row">
-      <button class="btn" id="btnRender">Render</button>
-    </div>
-  </div>
+      <div id="empty" class="center-overlay show">
+        <div class="card">
+          <h3>Waiting for content</h3>
+          <p>
+            Use <b>Paste</b> to paste markdown, or send markdown from your website via <span class="mono">postMessage</span>.
+            Once the viewer receives content, it will render and auto-fit.
+          </p>
+        </div>
+      </div>
 
-  <div class="error" id="errorBox"></div>
+      <div id="error" class="center-overlay">
+        <div class="card">
+          <h3>Library load failed</h3>
+          <p>
+            The viewer could not load D3 / Markmap from the CDN. This is usually caused by a network/content blocker, or a CDN being blocked.
+            Try again, or switch networks. Details are shown below.
+          </p>
+          <div id="errorDetails" class="mono"></div>
+        </div>
+      </div>
+
+      <div id="pasteModal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-card">
+          <div class="modal-head">
+            <div class="label">Paste Markdown (Markmap)</div>
+            <button class="btn" id="btnPasteClose">Close</button>
+          </div>
+          <div class="modal-body">
+            <textarea id="pasteText" placeholder="# VAT&#10;## Animal feed&#10;### Pet food exceptions&#10;..."></textarea>
+          </div>
+          <div class="modal-foot">
+            <button class="btn" id="btnPasteCancel">Cancel</button>
+            <button class="btn" id="btnPasteApply">Render</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 
   <script>
-    (function(){
-      const LS_KEY_MD = "vat_mindmap_last_md";
-      const LS_KEY_SOURCES = "vat_mindmap_last_sources";
+    // ------------------------------------------------------------
+    // Robust script loader: jsDelivr first, then unpkg fallback.
+    // ------------------------------------------------------------
+    const CDN = {
+      d3: [
+        "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js",
+        "https://unpkg.com/d3@7/dist/d3.min.js"
+      ],
+      markmapLib: [
+        "https://cdn.jsdelivr.net/npm/markmap-lib@0.17.0/dist/browser/index.min.js",
+        "https://unpkg.com/markmap-lib@0.17.0/dist/browser/index.min.js"
+      ],
+      markmapView: [
+        "https://cdn.jsdelivr.net/npm/markmap-view@0.17.0/dist/browser/index.min.js",
+        "https://unpkg.com/markmap-view@0.17.0/dist/browser/index.min.js"
+      ]
+    };
 
-      const statusEl = document.getElementById("status");
-      const errorBox = document.getElementById("errorBox");
+    const elStatus = document.getElementById("status");
+    const elStage = document.getElementById("stage");
+    const elEmpty = document.getElementById("empty");
+    const elError = document.getElementById("error");
+    const elErrorDetails = document.getElementById("errorDetails");
+    const elSourcesList = document.getElementById("sourcesList");
+    const elSvg = document.getElementById("svg");
 
-      const sourcesPanel = document.getElementById("sourcesPanel");
-      const sourcesList = document.getElementById("sourcesList");
+    const elPasteModal = document.getElementById("pasteModal");
+    const elPasteText = document.getElementById("pasteText");
 
-      const pastePanel = document.getElementById("pastePanel");
-      const pasteText = document.getElementById("pasteText");
+    function setStatus(text, kind){
+      elStatus.textContent = text;
+      elStatus.classList.remove("ok","warn","bad");
+      if (kind) elStatus.classList.add(kind);
+    }
 
-      function setStatus(text){ statusEl.textContent = text; }
-      function showError(msg){
-        errorBox.textContent = msg;
-        errorBox.style.display = "block";
-        setTimeout(() => { errorBox.style.display = "none"; }, 9000);
+    function showEmpty(show){
+      elEmpty.classList.toggle("show", !!show);
+    }
+
+    function showError(show, details){
+      elError.classList.toggle("show", !!show);
+      if (show) {
+        elErrorDetails.textContent = details || "";
+        setStatus("Library load failed", "bad");
       }
+    }
 
-      function dedupeSources(arr){
-        const seen = new Set();
-        const out = [];
-        for (const s of (Array.isArray(arr) ? arr : [])){
-          const doc_id = (s && (s.doc_id || s.docId || s.id)) ? String(s.doc_id || s.docId || s.id) : "";
-          const title = (s && s.title) ? String(s.title) : "";
-          const url = (s && (s.source_url || s.url)) ? String(s.source_url || s.url) : "";
-          const key = (doc_id + "|" + title + "|" + url).trim().toLowerCase();
-          if (!key || seen.has(key)) continue;
-          seen.add(key);
-          out.push({ doc_id, title, url });
+    function loadScript(url){
+      return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = url;
+        s.async = true;
+        s.onload = () => resolve(url);
+        s.onerror = () => reject(new Error("Failed to load: " + url));
+        document.head.appendChild(s);
+      });
+    }
+
+    async function loadWithFallback(name, urls){
+      let lastErr = null;
+      for (const url of urls) {
+        try {
+          setStatus("Loading " + name + "…", "warn");
+          await loadScript(url);
+          return url;
+        } catch (e) {
+          lastErr = e;
         }
-        return out;
       }
+      throw lastErr || new Error("Unknown error loading " + name);
+    }
 
-      function renderSources(list){
-        const src = dedupeSources(list);
-        sourcesList.innerHTML = "";
-        if (!src.length){
-          sourcesList.innerHTML = "<div class='src'><div class='t'>No sources provided</div><div class='m'>When you send sources from Squarespace/n8n, they will appear here.</div></div>";
-          return;
-        }
-        for (const s of src){
-          const div = document.createElement("div");
-          div.className = "src";
-          const title = s.title || "(untitled source)";
-          const meta = [
-            s.doc_id ? `doc_id: ${s.doc_id}` : "",
-            s.url ? `<a href="${s.url}" target="_blank" rel="noopener noreferrer">open source</a>` : ""
-          ].filter(Boolean).join(" · ");
-          div.innerHTML = `<div class="t">${escapeHtml(title)}</div><div class="m">${meta || ""}</div>`;
-          sourcesList.appendChild(div);
-        }
+    // ------------------------------------------------------------
+    // Markmap renderer
+    // ------------------------------------------------------------
+    let transformer = null;
+    let mm = null;
+    let currentMarkdown = "";
+    let currentSources = [];
+
+    function dedupeSources(arr){
+      const out = [];
+      const seen = new Set();
+      for (const s of (Array.isArray(arr) ? arr : [])) {
+        const title = String(s.title || "").trim();
+        const docId = String(s.doc_id || s.docId || "").trim();
+        const url = String(s.source_url || s.url || "").trim();
+        const key = (docId || title || url || JSON.stringify(s)).toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          title: title || "Source",
+          doc_id: docId || "",
+          source_url: url || "",
+          chunk_index: (typeof s.chunk_index === "number") ? s.chunk_index : (s.chunkIndex ?? "")
+        });
       }
+      return out;
+    }
 
-      function escapeHtml(str){
-        return String(str).replace(/[&<>"']/g, (m) => ({
-          "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-        }[m]));
-      }
-
-      // Markmap init
-      const { Markmap, Transformer } = window.markmap || {};
-      if (!Markmap || !Transformer){
-        showError("Markmap libraries did not load. Check your browser console and CDN access.");
-        setStatus("Library load failed");
+    function renderSources(){
+      elSourcesList.innerHTML = "";
+      if (!currentSources.length) {
+        elSourcesList.innerHTML = '<div class="src-meta">No sources received yet.</div>';
         return;
       }
-      const transformer = new Transformer();
+      for (const s of currentSources) {
+        const card = document.createElement("div");
+        card.className = "src-card";
 
-      const svg = document.getElementById("mindmap");
-      const mm = Markmap.create(svg, { duration: 180 });
+        const t = document.createElement("div");
+        t.className = "src-title";
+        t.textContent = s.title || "Source";
 
-      function setMindmap(md, sources, originLabel){
-        const markdown = String(md || "").trim();
-        if (!markdown){
-          setStatus("Waiting for content…");
-          mm.setData({ content: "VAT", children: [] });
-          mm.fit();
-          renderSources([]);
-          return;
+        const m = document.createElement("div");
+        m.className = "src-meta";
+        const parts = [];
+        if (s.doc_id) parts.push("doc_id: " + s.doc_id);
+        if (s.chunk_index !== "" && s.chunk_index !== null && s.chunk_index !== undefined) parts.push("chunk: " + s.chunk_index);
+        m.textContent = parts.join(" • ") || "";
+
+        card.appendChild(t);
+        if (m.textContent) card.appendChild(m);
+
+        if (s.source_url) {
+          const a = document.createElement("a");
+          a.className = "src-link";
+          a.href = s.source_url;
+          a.target = "_blank";
+          a.rel = "noopener";
+          a.textContent = "Open source";
+          card.appendChild(a);
         }
 
-        try{
-          const { root } = transformer.transform(markdown);
-          mm.setData(root);
-          mm.fit();
+        elSourcesList.appendChild(card);
+      }
+    }
 
-          const src = dedupeSources(sources);
-          renderSources(src);
+    function ensureMarkmap(){
+      if (!window.markmap || !window.markmap.Transformer || !window.markmap.Markmap) {
+        throw new Error("Markmap globals are missing after load (window.markmap.Transformer/Markmap).");
+      }
+      if (!transformer) transformer = new window.markmap.Transformer();
+      return { Transformer: window.markmap.Transformer, Markmap: window.markmap.Markmap };
+    }
 
-          localStorage.setItem(LS_KEY_MD, markdown);
-          localStorage.setItem(LS_KEY_SOURCES, JSON.stringify(src));
+    function renderMarkdown(md){
+      currentMarkdown = String(md || "").trim();
+      if (!currentMarkdown) {
+        showError(false);
+        showEmpty(true);
+        setStatus("Waiting for content…", "warn");
+        return;
+      }
 
-          setStatus(originLabel || "Loaded");
-        }catch(e){
-          showError("Could not render mindmap. Make sure the markdown is valid.\n\n" + (e && e.message ? e.message : String(e)));
-          setStatus("Render error");
+      showEmpty(false);
+      showError(false);
+
+      const { Markmap } = ensureMarkmap();
+      const { root } = transformer.transform(currentMarkdown);
+
+      if (!mm) {
+        mm = Markmap.create(elSvg, {
+          duration: 0,
+          maxWidth: 320,
+          paddingX: 12,
+          spacingHorizontal: 90,
+          spacingVertical: 10
+        }, root);
+      } else {
+        mm.setData(root);
+      }
+
+      fitNow();
+      setStatus("Rendered", "ok");
+    }
+
+    function fitNow(){
+      try {
+        if (mm && mm.fit) mm.fit();
+      } catch (e) {
+        // non-fatal
+      }
+    }
+
+    // ------------------------------------------------------------
+    // UI events
+    // ------------------------------------------------------------
+    document.getElementById("btnSources").addEventListener("click", () => {
+      elStage.classList.toggle("sources-open");
+    });
+
+    document.getElementById("btnFit").addEventListener("click", () => fitNow());
+
+    document.getElementById("btnClear").addEventListener("click", () => {
+      currentMarkdown = "";
+      currentSources = [];
+      renderSources();
+      mm = null;
+      transformer = transformer || null;
+      elSvg.innerHTML = "";
+      showEmpty(true);
+      showError(false);
+      setStatus("Waiting for content…", "warn");
+    });
+
+    document.getElementById("btnPaste").addEventListener("click", () => {
+      elPasteText.value = currentMarkdown || "";
+      elPasteModal.classList.add("show");
+      setTimeout(() => elPasteText.focus(), 50);
+    });
+
+    function closePaste(){
+      elPasteModal.classList.remove("show");
+    }
+    document.getElementById("btnPasteClose").addEventListener("click", closePaste);
+    document.getElementById("btnPasteCancel").addEventListener("click", closePaste);
+    document.getElementById("btnPasteApply").addEventListener("click", () => {
+      closePaste();
+      renderMarkdown(elPasteText.value);
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closePaste();
+    });
+
+    window.addEventListener("resize", () => {
+      // small debounce
+      clearTimeout(window.__fitTimer);
+      window.__fitTimer = setTimeout(() => fitNow(), 120);
+    });
+
+    // ------------------------------------------------------------
+    // postMessage API (for Squarespace overlay / web app)
+    // Send:
+    //   iframe.contentWindow.postMessage({ type:'vat-mindmap:set', markdown:'...', sources:[...] }, '*')
+    // ------------------------------------------------------------
+    window.addEventListener("message", (event) => {
+      const data = event.data;
+
+      // Allow either an object message or a raw string markdown
+      if (typeof data === "string") {
+        try {
+          renderMarkdown(data);
+        } catch (e) {
+          showError(true, String(e && e.message ? e.message : e));
+        }
+        return;
+      }
+
+      if (!data || typeof data !== "object") return;
+
+      if (data.type === "vat-mindmap:set") {
+        try {
+          const md = String(data.markdown || "");
+          const src = dedupeSources(data.sources || []);
+          currentSources = src;
+          renderSources();
+          renderMarkdown(md);
+          // optional ACK
+          try { event.source && event.source.postMessage({ type: "vat-mindmap:ack" }, event.origin); } catch(_){}
+        } catch (e) {
+          showError(true, String(e && e.message ? e.message : e));
         }
       }
 
-      // Buttons
-      document.getElementById("btnFit").addEventListener("click", () => mm.fit());
-      document.getElementById("btnSources").addEventListener("click", () => { sourcesPanel.style.display = "block"; });
-      document.getElementById("closeSources").addEventListener("click", () => { sourcesPanel.style.display = "none"; });
-
-      document.getElementById("btnPaste").addEventListener("click", () => {
-        pastePanel.style.display = "block";
-        const last = localStorage.getItem(LS_KEY_MD) || "";
-        if (!pasteText.value.trim()) pasteText.value = last.trim();
-      });
-      document.getElementById("closePaste").addEventListener("click", () => { pastePanel.style.display = "none"; });
-      document.getElementById("btnRender").addEventListener("click", () => {
-        pastePanel.style.display = "none";
-        setMindmap(pasteText.value, safeJson(localStorage.getItem(LS_KEY_SOURCES)), "Loaded (manual paste)");
-      });
-
-      document.getElementById("btnClear").addEventListener("click", () => {
-        localStorage.removeItem(LS_KEY_MD);
-        localStorage.removeItem(LS_KEY_SOURCES);
-        setMindmap("", [], "Cleared");
-      });
-
-      function safeJson(s){
-        try{ return JSON.parse(s || "[]"); }catch(_){ return []; }
+      if (data.type === "vat-mindmap:fit") {
+        fitNow();
       }
 
-      // Listen for Squarespace -> iframe postMessage
-      window.addEventListener("message", (event) => {
-        const d = event && event.data ? event.data : null;
-        if (!d || typeof d !== "object") return;
-
-        // Accept these message types
-        if (d.type === "vat-mindmap" || d.type === "vat_mindmap"){
-          setMindmap(d.markdown, d.sources, "Loaded (embedded)");
-          if (d.openSources === true) sourcesPanel.style.display = "block";
-          return;
-        }
-        if (d.type === "vat-fit"){ mm.fit(); return; }
-        if (d.type === "vat-clear"){ document.getElementById("btnClear").click(); return; }
-      });
-
-      // Load last saved content (so opening the page directly shows something)
-      const lastMd = (localStorage.getItem(LS_KEY_MD) || "").trim();
-      const lastSources = safeJson(localStorage.getItem(LS_KEY_SOURCES));
-      if (lastMd){
-        setMindmap(lastMd, lastSources, "Loaded (last saved)");
-      }else{
-        // A simple placeholder so you can immediately see it works
-        const demo =
-`# VAT
-## Animal feed
-### Pet food exceptions
-### Working animals
-## Food & drink
-### Catering rules
-### Takeaway vs eat-in`;
-        setMindmap(demo, [], "Loaded (demo)");
+      if (data.type === "vat-mindmap:clear") {
+        document.getElementById("btnClear").click();
       }
+    });
 
-      // Responsive fit
-      window.addEventListener("resize", () => {
-        try{ mm.fit(); }catch(_){}
-      });
+    // ------------------------------------------------------------
+    // Boot
+    // ------------------------------------------------------------
+    (async function boot(){
+      try {
+        showEmpty(true);
+        setStatus("Loading libraries…", "warn");
 
+        const u1 = await loadWithFallback("D3", CDN.d3);
+        const u2 = await loadWithFallback("markmap-lib", CDN.markmapLib);
+        const u3 = await loadWithFallback("markmap-view", CDN.markmapView);
+
+        // sanity check
+        ensureMarkmap();
+
+        setStatus("Ready (waiting for content)", "ok");
+        showError(false);
+
+        // If someone opens the page directly, leave it waiting.
+        // You can paste markdown via the Paste button.
+
+      } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        showError(true, msg);
+      }
     })();
   </script>
 </body>
