@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>VAT Mindmap Viewer</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { background: #0b1220; color: #e5e7eb; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 52px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 12px;
+      background: rgba(7, 12, 22, 0.92);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      z-index: 5;
+    }
+    .title { font-weight: 650; letter-spacing: .2px; opacity: .95; }
+    .spacer { flex: 1; }
+    .btn {
+      appearance: none; border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.06);
+      color: #e5e7eb;
+      padding: 8px 10px; border-radius: 10px;
+      cursor: pointer; font-size: 13px;
+    }
+    .btn:hover { background: rgba(255,255,255,0.10); }
+    .btn:active { transform: translateY(1px); }
+    .pill {
+      font-size: 12px; padding: 6px 10px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      opacity: .9;
+    }
+    #stage {
+      position: absolute; top: 52px; left: 0; right: 0; bottom: 0;
+      overflow: hidden;
+    }
+    #svgWrap {
+      width: 100%; height: 100%;
+      background: radial-gradient(900px 500px at 30% 20%, rgba(59,130,246,0.10), transparent 60%),
+                  radial-gradient(800px 500px at 70% 80%, rgba(16,185,129,0.08), transparent 60%);
+    }
+    .hint {
+      position: fixed; left: 12px; bottom: 10px;
+      font-size: 12px; opacity: .7;
+      z-index: 5;
+    }
+    .panel {
+      position: fixed; top: 64px; right: 12px;
+      width: min(420px, calc(100vw - 24px));
+      max-height: calc(100vh - 76px);
+      overflow: auto;
+      background: rgba(10, 16, 30, 0.94);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+      display: none;
+      z-index: 6;
+    }
+    .panel h3 { margin: 4px 0 10px; font-size: 14px; opacity: .9; }
+    .src {
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.04);
+      margin-bottom: 8px;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .src b { display: block; margin-bottom: 3px; font-size: 13px; }
+    .src small { opacity: .8; }
+    .toast {
+      position: fixed; left: 12px; top: 64px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      display: none;
+      z-index: 7;
+      max-width: min(520px, calc(100vw - 24px));
+    }
+    .error { border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.10); }
+    .ok { border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.08); }
+
+    /* Make deep trees readable */
+    .markmap-node text { font-size: 14px; }
+    .markmap-node.depth-1 text { font-size: 18px; font-weight: 700; }
+    .markmap-node.depth-2 text { font-size: 16px; font-weight: 650; }
+    .markmap-node.depth-3 text { font-size: 14px; }
+    .markmap-node.depth-4 text,
+    .markmap-node.depth-5 text,
+    .markmap-node.depth-6 text { font-size: 13px; }
+  </style>
+
+  <!-- Markmap browser bundle + d3 -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.17.3/dist/browser/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17.3/dist/browser/index.min.js"></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="title">VAT Mindmap</div>
+    <div class="pill" id="statusPill">Waiting for content…</div>
+    <div class="spacer"></div>
+    <button class="btn" id="fitBtn" type="button">Fit</button>
+    <button class="btn" id="sourcesBtn" type="button">Sources</button>
+    <button class="btn" id="clearBtn" type="button">Clear</button>
+  </div>
+
+  <div id="stage">
+    <svg id="svgWrap"></svg>
+  </div>
+
+  <div class="hint">Tip: send Markdown via postMessage. Keys supported: <code>markdown</code>, <code>sources</code>, <code>fit</code>.</div>
+
+  <div class="panel" id="sourcesPanel">
+    <h3>Verified sources</h3>
+    <div id="sourcesList"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    (function () {
+      const toast = document.getElementById('toast');
+      const statusPill = document.getElementById('statusPill');
+      const sourcesPanel = document.getElementById('sourcesPanel');
+      const sourcesList = document.getElementById('sourcesList');
+
+      function showToast(msg, kind) {
+        toast.textContent = msg;
+        toast.className = 'toast ' + (kind || '');
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 3200);
+      }
+
+      function setStatus(text, ok) {
+        statusPill.textContent = text;
+        statusPill.style.borderColor = ok ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.12)';
+        statusPill.style.background = ok ? 'rgba(16,185,129,0.10)' : 'rgba(255,255,255,0.05)';
+      }
+
+      function dedupeSources(list) {
+        const seen = new Set();
+        const out = [];
+        for (const s of (Array.isArray(list) ? list : [])) {
+          const docId = String(s.doc_id ?? s.docId ?? '').trim();
+          const title = String(s.title ?? '').trim();
+          const id = String(s.id ?? '').trim();
+          const key = (docId || id || title).toLowerCase();
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          out.push({ doc_id: docId || 'unknown', title: title || 'unknown', id: id || 'unknown' });
+        }
+        return out.slice(0, 12);
+      }
+
+      function renderSources(list) {
+        sourcesList.innerHTML = '';
+        const items = dedupeSources(list);
+        if (!items.length) {
+          const div = document.createElement('div');
+          div.className = 'src';
+          div.innerHTML = '<b>No sources received</b><small>Send a <code>sources</code> array via postMessage.</small>';
+          sourcesList.appendChild(div);
+          return;
+        }
+        for (const s of items) {
+          const div = document.createElement('div');
+          div.className = 'src';
+          div.innerHTML =
+            `<b>${escapeHtml(s.doc_id)}</b>` +
+            `<small>${escapeHtml(s.title)}</small>`;
+          sourcesList.appendChild(div);
+        }
+      }
+
+      function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+      }
+
+      // Markmap init
+      const svg = document.getElementById('svgWrap');
+      const mm = markmap.Markmap.create(svg, { autoFit: true });
+
+      function applyDepthClasses() {
+        // markmap renders g.markmap-node; add depth class to improve font scaling
+        const nodes = svg.querySelectorAll('g.markmap-node');
+        nodes.forEach(n => {
+          const depth = n.getAttribute('data-depth');
+          if (depth) n.classList.add('depth-' + depth);
+        });
+      }
+
+      function fit() {
+        try {
+          mm.fit();
+        } catch (e) {}
+      }
+
+      function setMarkdown(md) {
+        const text = String(md || '').trim();
+        if (!text) {
+          setStatus('No content', false);
+          showToast('No markdown provided', 'error');
+          return;
+        }
+        mm.setData(markmap.transformer.transform(text).root);
+        applyDepthClasses();
+        setStatus('Loaded', true);
+        setTimeout(fit, 50);
+      }
+
+      // Buttons
+      document.getElementById('fitBtn').addEventListener('click', () => fit());
+      document.getElementById('sourcesBtn').addEventListener('click', () => {
+        sourcesPanel.style.display = (sourcesPanel.style.display === 'block') ? 'none' : 'block';
+      });
+      document.getElementById('clearBtn').addEventListener('click', () => {
+        setMarkdown('# VAT\n\n- (waiting for new content)');
+        renderSources([]);
+        setStatus('Waiting for content…', false);
+      });
+
+      // Receive messages from parent
+      window.addEventListener('message', (ev) => {
+        const data = ev.data || {};
+        if (typeof data !== 'object') return;
+
+        // expected keys: markdown, sources, fit
+        if (data.markdown !== undefined) {
+          setMarkdown(data.markdown);
+          showToast('Mindmap updated', 'ok');
+        }
+        if (data.sources !== undefined) {
+          renderSources(data.sources);
+        }
+        if (data.fit) fit();
+      });
+
+      // Initial placeholder
+      setMarkdown('# VAT\n\n- Click “Mindmap” on the site\n- The map will load here');
+      renderSources([]);
+      setStatus('Waiting for content…', false);
+    })();
+  </script>
+</body>
+</html>
