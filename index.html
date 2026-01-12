@@ -3,300 +3,309 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>VAT Mindmap Viewer</title>
-
+  <title>VAT Taxonomy Viewer</title>
   <style>
     :root { color-scheme: dark; }
-    html, body {
-      height: 100%;
-      margin: 0;
-      background: #12161c;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      color: rgba(255,255,255,.88);
-    }
+    html, body { height: 100%; margin: 0; background: #2f343d; overflow: hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: rgba(255,255,255,.92); }
 
-    header {
-      position: fixed;
-      inset: 0 0 auto 0;
-      height: 52px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 0 12px;
-      background: rgba(18,22,28,.95);
-      border-bottom: 1px solid rgba(255,255,255,.08);
-      z-index: 10;
-      user-select: none;
+    header{
+      position: fixed; inset: 0 0 auto 0; height: 64px;
+      display:flex; align-items:flex-start; justify-content:space-between;
+      padding: 14px 16px 0 16px;
+      z-index: 10; pointer-events: none;
     }
-    .title { font-weight: 650; letter-spacing: .2px; }
-    .crumbs { display: flex; gap: 6px; align-items: center; overflow: hidden; }
-    .crumbs button {
-      appearance: none;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.06);
-      color: rgba(255,255,255,.9);
-      border-radius: 12px;
-      padding: 6px 10px;
-      font: inherit;
-      cursor: pointer;
-      white-space: nowrap;
-      max-width: 260px;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .h-left { pointer-events: none; }
+    .h-title { font-weight: 700; font-size: 22px; line-height: 1.15; }
+    .h-sub { margin-top: 4px; font-size: 12px; opacity: .75; }
+
+    .h-right { display:flex; gap:10px; pointer-events: auto; }
+    .btn{
+      appearance:none; border:1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.20); color: rgba(255,255,255,.92);
+      border-radius: 10px; padding: 8px 10px; font: inherit; cursor:pointer;
     }
-    .crumbs .sep { opacity: .55; padding: 0 2px; }
-    .hint { margin-left: auto; font-size: 12px; opacity: .72; white-space: nowrap; }
+    .btn:hover{ background: rgba(0,0,0,.28); }
 
-    main { position: fixed; inset: 52px 0 0 0; background: #12161c; }
-    svg#mindmap { width: 100%; height: 100%; display: block; }
+    #wrap{ position: fixed; inset: 0; }
+    svg{ width:100%; height:100%; display:block; }
 
-    /* Node box styling (Markmap uses foreignObject with a DIV inside) */
-    svg#mindmap foreignObject > div {
-      background: rgba(255,255,255,.08);
+    .link{ fill:none; stroke: rgba(148,163,184,.35); stroke-width: 2; }
+
+    /* Node cards */
+    .card{
+      display:inline-flex; align-items:center; gap:10px;
+      padding: 10px 12px; border-radius: 10px;
       border: 1px solid rgba(255,255,255,.12);
-      border-radius: 12px;
-      padding: 7px 10px;
-      box-shadow: 0 10px 24px rgba(0,0,0,.25);
-      font-size: 13px;
-      line-height: 1.2;
+      background: rgba(75,85,99,.42);
+      box-shadow: 0 10px 24px rgba(0,0,0,.18);
+      white-space: nowrap; user-select:none;
+      color: rgba(255,255,255,.95);
+    }
+    .label{ font-size: 14px; line-height: 1.2; max-width: 560px; overflow:hidden; text-overflow: ellipsis; }
+
+    .chev{
+      margin-left: 6px; opacity:.78; font-weight:800;
+      border:1px solid rgba(255,255,255,.14);
+      width:22px; height:22px; border-radius: 7px;
+      display:inline-flex; align-items:center; justify-content:center;
+      background: rgba(0,0,0,.18); flex:0 0 auto;
     }
 
-    .mm-chevron { opacity: .65; margin-left: 8px; }
-
-    .rate {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-weight: 600;
+    /* VAT pills */
+    .pill{
+      display:inline-flex; align-items:center;
+      padding: 4px 10px; border-radius: 999px;
+      font-weight: 700; font-size: 12px;
       border: 1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.06);
+      background: rgba(0,0,0,.18);
+      margin-left: 10px;
     }
-    .rate.zero { background: rgba(34,197,94,.20); border-color: rgba(34,197,94,.35); }
-    .rate.standard { background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.35); }
-    .rate.reduced { background: rgba(245,158,11,.18); border-color: rgba(245,158,11,.35); }
-    .rate.exempt { background: rgba(148,163,184,.18); border-color: rgba(148,163,184,.35); }
-    .rate.depends { background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.35); }
+    .pill.zero     { background: rgba(34,197,94,.20);  border-color: rgba(34,197,94,.35); }
+    .pill.standard { background: rgba(239,68,68,.18);  border-color: rgba(239,68,68,.35); }
+    .pill.reduced  { background: rgba(245,158,11,.18); border-color: rgba(245,158,11,.35); }
+    .pill.exempt   { background: rgba(148,163,184,.18); border-color: rgba(148,163,184,.35); }
+    .pill.depends  { background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.35); }
+
+    .hint{
+      position: fixed; left: 16px; bottom: 14px;
+      font-size: 12px; opacity: .70;
+      background: rgba(0,0,0,.18);
+      border: 1px solid rgba(255,255,255,.12);
+      padding: 8px 10px; border-radius: 10px;
+      pointer-events:none;
+    }
   </style>
 </head>
 
 <body>
   <header>
-    <div class="title" id="hdrTitle">VAT Mindmap</div>
-    <div class="crumbs" id="crumbs"></div>
-    <div class="hint">Click to drill in. Click same node again to step back. Esc = Home.</div>
+    <div class="h-left">
+      <div class="h-title" id="title">UK VAT Taxonomy</div>
+      <div class="h-sub" id="sub">Waiting for markdown…</div>
+    </div>
+    <div class="h-right">
+      <button class="btn" id="btnFit" type="button">Fit</button>
+      <button class="btn" id="btnHome" type="button">Home</button>
+    </div>
   </header>
 
-  <main>
-    <svg id="mindmap"></svg>
-  </main>
+  <div id="wrap"><svg id="svg"></svg></div>
+  <div class="hint">Click a node to expand/collapse. Drag to pan. Scroll to zoom. Esc = Home.</div>
 
-  <!-- Known-good browser builds -->
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12/dist/browser/index.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.12/dist/browser/index.iife.js"></script>
-
   <script>
     (function () {
-      const api = window.markmap;
-      const svgEl = document.getElementById('mindmap');
-      const crumbsEl = document.getElementById('crumbs');
-      const titleEl = document.getElementById('hdrTitle');
+      const MAX_DEPTH = 6;                // your hard cap
+      const COLLAPSE_FROM_DEPTH = 2;      // show root + top categories; collapse below
+      const NODE_GAP_X = 64;              // vertical spacing
+      const NODE_GAP_Y = 280;             // horizontal spacing
 
-      const MAX_DEPTH = 6;
+      const svg = d3.select("#svg");
+      const g = svg.append("g");
+      const titleEl = document.getElementById("title");
+      const subEl = document.getElementById("sub");
+      const btnFit = document.getElementById("btnFit");
+      const btnHome = document.getElementById("btnHome");
 
-      let transformer = null;
-      let mm = null;
+      let root = null;
+      let zoom = null;
 
-      let baseRoot = null;        // immutable reference tree
-      const idMap = new Map();    // id -> base node
-      let selectedId = "0";       // current drill position
-
-      function stripHtml(html) {
-        return String(html || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+      function decodeEntities(s) {
+        // Converts "&amp;" -> "&" and "&#x2014;" -> "—"
+        const ta = document.createElement("textarea");
+        ta.innerHTML = String(s ?? "");
+        return ta.value;
       }
 
-      function pruneToDepth(node, maxDepth, depth = 1) {
-        if (!node || !Array.isArray(node.children)) return;
-        if (depth >= maxDepth) { node.children = []; return; }
-        node.children.forEach(ch => pruneToDepth(ch, maxDepth, depth + 1));
-      }
+      function setSub(msg) { subEl.textContent = msg; }
 
-      function indexTree(node, id = "0") {
-        node.__id = id;
-        node.__baseContent = node.content; // keep original label (no chevrons/badges)
-        node.__allChildren = Array.isArray(node.children) ? node.children : [];
-        idMap.set(id, node);
-        node.__allChildren.forEach((ch, i) => indexTree(ch, id + "." + i));
-      }
+      // Zoom / pan
+      zoom = d3.zoom().scaleExtent([0.35, 2.6]).on("zoom", (event) => g.attr("transform", event.transform));
+      svg.call(zoom);
 
-      function isOnRoute(nodeId, selId) {
-        return selId === nodeId || selId.startsWith(nodeId + ".");
-      }
-
-      function decorateContent(node) {
-        const raw = String(node.__baseContent || "");
-        const txt = stripHtml(raw).toLowerCase();
-
-        // VAT badge if this node is a VAT rate leaf
-        if (txt.startsWith("vat rate:")) {
-          let cls = "depends";
-          if (txt.includes("zero")) cls = "zero";
-          else if (txt.includes("standard")) cls = "standard";
-          else if (txt.includes("reduced")) cls = "reduced";
-          else if (txt.includes("exempt")) cls = "exempt";
-
-          const label = stripHtml(raw);
-          return `<span class="rate ${cls}">${label}</span>`;
+      // Parse markdown headings only (# .. ######)
+      function parseHeadings(md) {
+        const lines = String(md || "").split(/\r?\n/);
+        const items = [];
+        for (const line of lines) {
+          const m = line.match(/^(#{1,6})\s+(.*)$/);
+          if (!m) continue;
+          const level = m[1].length;
+          const text = decodeEntities((m[2] || "").trim());
+          if (!text) continue;
+          items.push({ level, text });
         }
+        if (!items.length) return null;
 
-        // Chevron for nodes that can expand
-        const hasKids = (node.__allChildren || []).length > 0;
-        return raw + (hasKids ? ` <span class="mm-chevron">›</span>` : "");
-      }
+        const baseLevel = items[0].level;
+        const rootNode = { name: items[0].text, children: [] };
+        const stack = [{ level: items[0].level, node: rootNode }];
 
-      function buildDisplayTree(node) {
-        const out = { ...node };
-        out.content = decorateContent(node);
+        for (let i = 1; i < items.length; i++) {
+          const { level, text } = items[i];
+          const relDepth = (level - baseLevel) + 1; // root=1
+          if (relDepth > MAX_DEPTH) continue;
 
-        if (isOnRoute(node.__id, selectedId)) {
-          out.children = (node.__allChildren || []).map(buildDisplayTree);
-        } else {
-          out.children = [];
+          const node = { name: text, children: [] };
+          while (stack.length && stack[stack.length - 1].level >= level) stack.pop();
+          const parent = stack.length ? stack[stack.length - 1].node : rootNode;
+          parent.children.push(node);
+          stack.push({ level, node });
         }
-        return out;
+        return rootNode;
       }
 
-      function pathIds(selId) {
-        const parts = selId.split(".");
-        const ids = [];
-        for (let i = 0; i < parts.length; i++) ids.push(parts.slice(0, i + 1).join("."));
-        return ids;
-      }
-
-      function renderBreadcrumbs() {
-        crumbsEl.innerHTML = "";
-        const ids = pathIds(selectedId);
-
-        ids.forEach((id, idx) => {
-          const n = idMap.get(id);
-          if (!n) return;
-
-          const label = stripHtml(n.__baseContent);
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.textContent = label || "…";
-          btn.title = label || "";
-          btn.addEventListener("click", () => { selectedId = id; render(); });
-          crumbsEl.appendChild(btn);
-
-          if (idx < ids.length - 1) {
-            const sep = document.createElement("span");
-            sep.className = "sep";
-            sep.textContent = "›";
-            crumbsEl.appendChild(sep);
-          }
-        });
-      }
-
-      function maybePromise(x) {
-        return (x && typeof x.then === "function") ? x : Promise.resolve(x);
-      }
-
-      function getNodeFromEvent(e) {
-        let el = e.target;
-        while (el && !el.__data__) el = el.parentNode;
-        const d = el && el.__data__;
-        if (d && typeof d === "object" && typeof d.__id === "string") return d;
+      function classifyVatPill(name) {
+        const t = String(name || "").toLowerCase();
+        if (t.includes("zero-rated"))     return { cls: "zero", label: "Zero-Rated" };
+        if (t.includes("standard-rated")) return { cls: "standard", label: "Standard-Rated" };
+        if (t.includes("reduced-rated"))  return { cls: "reduced", label: "Reduced-Rated" };
+        if (t.includes("exempt"))         return { cls: "exempt", label: "Exempt" };
+        if (t.includes("depends"))        return { cls: "depends", label: "Depends" };
         return null;
       }
 
-      async function render() {
-        if (!baseRoot) return;
-
-        renderBreadcrumbs();
-        const displayRoot = buildDisplayTree(baseRoot);
-
-        if (!mm) {
-          mm = api.Markmap.create(svgEl, {
-            initialExpandLevel: 99, // we collapse by removing children, not toggles
-            zoom: true,
-            pan: true,
-            autoFit: false
-          }, displayRoot);
-        } else {
-          await maybePromise(mm.setData(displayRoot, { initialExpandLevel: 99 }));
+      function collapse(d) {
+        if (d.children) {
+          d._children = d.children;
+          d._children.forEach(collapse);
+          d.children = null;
         }
-
-        await maybePromise(mm.fit());
       }
 
-      async function loadMarkdown(markdown) {
-        const md = String(markdown || "").trim();
-        if (!md) return;
+      function collapseFromDepth(d, depth) {
+        if (!d) return;
+        if (depth >= COLLAPSE_FROM_DEPTH) {
+          collapse(d);
+        } else {
+          if (d.children) d.children.forEach(ch => collapseFromDepth(ch, depth + 1));
+        }
+      }
 
-        // Safety: detect missing Markmap libs
-        if (!api || !api.Markmap || !api.Transformer) {
-          titleEl.textContent = "VAT Mindmap (ERROR)";
-          crumbsEl.innerHTML = "";
-          console.error("Markmap libraries missing. window.markmap =", window.markmap);
+      function expandAll(d) {
+        if (d._children) { d.children = d._children; d._children = null; }
+        if (d.children) d.children.forEach(expandAll);
+      }
+
+      function update() {
+        const tree = d3.tree().nodeSize([NODE_GAP_X, NODE_GAP_Y]);
+        tree(root);
+
+        const nodes = root.descendants();
+        const links = root.links();
+        nodes.forEach(d => { d.y = d.depth * NODE_GAP_Y; });
+
+        // links
+        const linkSel = g.selectAll("path.link").data(links, d => d.target.id);
+        linkSel.enter().append("path").attr("class", "link")
+          .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
+        linkSel.attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
+        linkSel.exit().remove();
+
+        // nodes
+        const nodeSel = g.selectAll("g.node").data(nodes, d => d.id);
+        const nodeEnter = nodeSel.enter().append("g")
+          .attr("class", "node")
+          .attr("transform", d => `translate(${d.y},${d.x})`)
+          .style("cursor", "pointer")
+          .on("click", (event, d) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (d.children) { d._children = d.children; d.children = null; }
+            else { d.children = d._children; d._children = null; }
+            update();
+          });
+
+        nodeEnter.append("foreignObject")
+          .attr("x", 0).attr("y", -20)
+          .attr("width", d => {
+            const base = (String(d.data.name || "").length * 7) + 110;
+            return Math.max(200, Math.min(600, base));
+          })
+          .attr("height", 48)
+          .append("xhtml:div")
+          .attr("class", "card")
+          .html(d => {
+            const name = String(d.data.name || "");
+            const pill = classifyVatPill(name);
+            const pillHtml = pill ? ` <span class="pill ${pill.cls}">${pill.label}</span>` : "";
+            const hasKids = (d.children && d.children.length) || (d._children && d._children.length);
+            const chev = hasKids ? `<span class="chev">›</span>` : `<span class="chev" style="opacity:.18">•</span>`;
+            return `<span class="label">${name}${pillHtml}</span>${chev}`;
+          });
+
+        nodeSel.attr("transform", d => `translate(${d.y},${d.x})`);
+        nodeSel.exit().remove();
+      }
+
+      function fitToScreen() {
+        const svgNode = svg.node();
+        const gNode = g.node();
+        if (!svgNode || !gNode) return;
+
+        const bbox = gNode.getBBox();
+        const w = svgNode.clientWidth, h = svgNode.clientHeight;
+        if (!bbox.width || !bbox.height) return;
+
+        const pad = 70;
+        const scale = Math.min(2.4, Math.max(0.35, Math.min((w - pad) / bbox.width, (h - pad) / bbox.height)));
+        const tx = (w - scale * (bbox.x + bbox.width / 2)) / 2;
+        const ty = (h - scale * (bbox.y + bbox.height / 2)) / 2;
+
+        svg.transition().duration(220).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+      }
+
+      function home() {
+        if (!root) return;
+        expandAll(root);
+        if (root.children) root.children.forEach(ch => collapseFromDepth(ch, 1));
+        update();
+        setTimeout(fitToScreen, 40);
+      }
+
+      btnFit.addEventListener("click", fitToScreen);
+      btnHome.addEventListener("click", home);
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") home(); });
+
+      async function loadMarkdown(md) {
+        const treeObj = parseHeadings(md);
+        if (!treeObj) {
+          titleEl.textContent = "UK VAT Taxonomy";
+          setSub("No headings found in markdown.");
+          g.selectAll("*").remove();
           return;
         }
 
-        transformer = transformer || new api.Transformer();
+        titleEl.textContent = treeObj.name || "UK VAT Taxonomy";
+        setSub("Loaded. Expand branches to reveal routes and VAT outcomes.");
 
-        const { root } = transformer.transform(md);
-        pruneToDepth(root, MAX_DEPTH, 1);
+        root = d3.hierarchy(treeObj, d => d.children);
+        let i = 0; root.each(d => d.id = ++i);
 
-        baseRoot = root;
-        idMap.clear();
-        indexTree(baseRoot, "0");
+        // initial collapse
+        if (root.children) root.children.forEach(ch => collapseFromDepth(ch, 1));
 
-        titleEl.textContent = stripHtml(baseRoot.__baseContent) || "VAT Mindmap";
-        selectedId = "0";
-
-        await render();
+        g.selectAll("*").remove();
+        update();
+        setTimeout(fitToScreen, 40);
       }
 
-      // Click: drill in / step back
-      svgEl.addEventListener("click", async (e) => {
-        const node = getNodeFromEvent(e);
-        if (!node) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (node.__id === selectedId) {
-          const parts = selectedId.split(".");
-          selectedId = (parts.length > 1) ? parts.slice(0, -1).join(".") : "0";
-        } else {
-          selectedId = node.__id;
-        }
-
-        await render();
-      }, true);
-
-      // Esc: home
-      document.addEventListener("keydown", async (e) => {
-        if (e.key === "Escape" && baseRoot) {
-          selectedId = "0";
-          await render();
-        }
+      // Messages from Squarespace overlay:
+      // { type: "VAT_MINDMAP_MD", markdown: "..." }
+      // { type: "FIT" }
+      // { type: "HOME" }
+      window.addEventListener("message", (event) => {
+        const data = event.data || {};
+        if (typeof data !== "object") return;
+        if (data.type === "VAT_MINDMAP_MD") loadMarkdown(data.markdown || "");
+        if (data.type === "FIT") fitToScreen();
+        if (data.type === "HOME") home();
       });
 
-      // postMessage from Squarespace
-      window.addEventListener("message", async (event) => {
-        const data = event.data;
-        if (!data || typeof data !== "object") return;
-
-        if (data.type === "VAT_MINDMAP_MD") {
-          await loadMarkdown(data.markdown || "");
-        } else if (data.type === "FIT" && mm) {
-          await maybePromise(mm.fit());
-        }
-      });
-
-      // Placeholder so you always see *something*
-      loadMarkdown("# VAT Mindmap\n## Waiting for markdown…\n");
+      // Placeholder
+      loadMarkdown(`# UK VAT Taxonomy: Animals, Food, and Catering
+## Waiting for markdown…`);
     })();
   </script>
 </body>
