@@ -97,4 +97,185 @@
 
       function attachParents(node, parent) {
         node.__parent = parent || null;
-        if (Array.isA
+        if (Array.isArray(node.children)) {
+          node.children.forEach(ch => attachParents(ch, node));
+        }
+      }
+
+      // depth is 1-based relative to the Markdown # root
+      function pruneToDepth(node, maxDepth, depth) {
+        const d = depth || 1;
+        if (!Array.isArray(node.children)) return;
+
+        if (d >= maxDepth) {
+          node.children = [];
+          return;
+        }
+        node.children.forEach(ch => pruneToDepth(ch, maxDepth, d + 1));
+      }
+
+      // clone a node + descendants, dropping transient fields
+      function cloneSubtree(node) {
+        const { children, state, __parent, ...rest } = node;
+        const out = { ...rest };
+        out.children = Array.isArray(children) ? children.map(cloneSubtree) : [];
+        return out;
+      }
+
+      // Build a “path + subtree” tree:
+      // root -> ... -> target -> (target descendants)
+      function buildFocusTree(targetNode) {
+        // Walk up via __parent
+        const chain = [];
+        let n = targetNode;
+        while (n) {
+          chain.push(n);
+          n = n.__parent;
+        }
+        chain.reverse(); // root first
+
+        // If user double-clicks the current root, just show that subtree (no path)
+        if (chain.length <= 1) {
+          return cloneSubtree(targetNode);
+        }
+
+        // Build path nodes without siblings
+        const rootClone = cloneSubtree(chain[0]);
+        // wipe children; we will build a single-child chain
+        rootClone.children = [];
+
+        let cursor = rootClone;
+        for (let i = 1; i < chain.length - 1; i++) {
+          const mid = cloneSubtree(chain[i]);
+          mid.children = [];
+          cursor.children = [mid];
+          cursor = mid;
+        }
+
+        // Attach full subtree at the end
+        const focused = cloneSubtree(chain[chain.length - 1]);
+        cursor.children = [focused];
+
+        return rootClone;
+      }
+
+      async function renderRoot(root, expandLevel) {
+        attachParents(root, null);
+
+        if (!mm) {
+          mm = Markmap.create(svgEl, {
+            initialExpandLevel: expandLevel,
+            zoom: true,
+            pan: true,
+            autoFit: false,
+            toggleRecursively: false,
+          }, root);
+        } else {
+          // setData is async in newer versions; await it to avoid “half render” states. :contentReference[oaicite:0]{index=0}
+          await mm.setData(root, { initialExpandLevel: expandLevel });
+        }
+
+        currentRoot = root;
+
+        // Fit after render
+        await mm.fit();
+      }
+
+      async function renderMarkdown(md) {
+        const markdown = String(md || '').trim();
+        if (!markdown) {
+          setStatus('No markdown received.');
+          return;
+        }
+
+        const { root } = transformer.transform(markdown);
+
+        // Cap depth to 6 levels
+        pruneToDepth(root, MAX_DEPTH, 1);
+        attachParents(root, null);
+
+        fullRoot = root;
+        focusStack.length = 0;
+
+        setStatus('Rendered. Double-click to focus. Esc to reset.');
+        await renderRoot(fullRoot, OVERVIEW_EXPAND);
+      }
+
+      async function focusOnNode(node) {
+        if (!node) return;
+
+        // push current view to stack so user can “drill in” repeatedly
+        if (currentRoot) focusStack.push(currentRoot);
+
+        const froot = buildFocusTree(node);
+        setStatus('Focused. Esc to reset.');
+        await renderRoot(froot, FOCUS_EXPAND);
+
+        // highlight focused node (optional; harmless if not visible)
+        try { await mm.setHighlight(null); } catch (_) {}
+      }
+
+      async function resetFocus() {
+        if (!fullRoot) return;
+        focusStack.length = 0;
+        setStatus('Rendered. Double-click to focus. Esc to reset.');
+        await renderRoot(fullRoot, OVERVIEW_EXPAND);
+      }
+
+      // Identify node from DOM element (d3 binds node data onto elements as __data__)
+      function getNodeFromEvent(e) {
+        let el = e.target;
+        while (el && !el.__data__) el = el.parentNode;
+        const d = el && el.__data__;
+        if (d && typeof d === 'object' && typeof d.content === 'string') return d;
+        return null;
+      }
+
+      // Focus on DOUBLE-CLICK so you still keep Markmap’s normal click-to-toggle behaviour. :contentReference[oaicite:1]{index=1}
+      svgEl.addEventListener('dblclick', async (e) => {
+        const node = getNodeFromEvent(e);
+        if (node) {
+          e.preventDefault();
+          e.stopPropagation();
+          await focusOnNode(node);
+        }
+      });
+
+      // If focused, clicking empty background resets
+      svgEl.addEventListener('click', async (e) => {
+        if (!fullRoot) return;
+        if (focusStack.length === 0 && currentRoot === fullRoot) return;
+
+        const node = getNodeFromEvent(e);
+        if (!node) {
+          await resetFocus();
+        }
+      });
+
+      // Esc resets to full map
+      document.addEventListener('keydown', async (e) => {
+        if (e.key === 'Escape') {
+          await resetFocus();
+        }
+      });
+
+      // postMessage interface
+      window.addEventListener('message', async (event) => {
+        const data = event.data || {};
+        if (!data || typeof data !== 'object') return;
+
+        if (data.type === 'VAT_MINDMAP_MD') {
+          await renderMarkdown(data.markdown || '');
+          return;
+        }
+
+        if (data.type === 'FIT' && mm) {
+          await mm.fit();
+        }
+      });
+
+      setStatus('Waiting for updates…');
+    })();
+  </script>
+</body>
+</html>
