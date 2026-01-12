@@ -7,43 +7,75 @@
 
   <style>
     :root { color-scheme: dark; }
-    html, body { height: 100%; margin: 0; background: #0b0f14; color: rgba(255,255,255,.88);
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #12161c;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color: rgba(255,255,255,.88);
+    }
 
     header {
-      position: fixed; inset: 0 0 auto 0; height: 48px;
-      display: flex; align-items: center; gap: 12px;
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
       padding: 0 12px;
-      background: rgba(0,0,0,.55);
+      background: rgba(18,22,28,.95);
       border-bottom: 1px solid rgba(255,255,255,.08);
-      backdrop-filter: blur(8px);
       z-index: 10;
       user-select: none;
     }
     .title { font-weight: 650; letter-spacing: .2px; }
     .crumbs { display: flex; gap: 6px; align-items: center; overflow: hidden; }
     .crumbs button {
-      appearance: none; border: 1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.06); color: rgba(255,255,255,.9);
-      border-radius: 10px; padding: 6px 10px; font: inherit;
-      cursor: pointer; white-space: nowrap;
-      max-width: 240px; overflow: hidden; text-overflow: ellipsis;
+      appearance: none;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.9);
+      border-radius: 12px;
+      padding: 6px 10px;
+      font: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .crumbs .sep { opacity: .5; }
+    .crumbs .sep { opacity: .55; padding: 0 2px; }
     .hint { margin-left: auto; font-size: 12px; opacity: .72; white-space: nowrap; }
 
-    main { position: fixed; inset: 48px 0 0 0; }
+    main { position: fixed; inset: 52px 0 0 0; background: #12161c; }
     svg#mindmap { width: 100%; height: 100%; display: block; }
 
-    /* Make nodes look more like “boxes” */
+    /* Node box styling (Markmap uses foreignObject with a DIV inside) */
     svg#mindmap foreignObject > div {
-      background: rgba(255,255,255,.07);
+      background: rgba(255,255,255,.08);
       border: 1px solid rgba(255,255,255,.12);
-      border-radius: 10px;
-      padding: 6px 10px;
-      box-shadow: 0 8px 18px rgba(0,0,0,.25);
+      border-radius: 12px;
+      padding: 7px 10px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.25);
+      font-size: 13px;
+      line-height: 1.2;
     }
-    svg#mindmap .mm-chevron { opacity: .65; margin-left: 8px; }
+
+    .mm-chevron { opacity: .65; margin-left: 8px; }
+
+    .rate {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+    }
+    .rate.zero { background: rgba(34,197,94,.20); border-color: rgba(34,197,94,.35); }
+    .rate.standard { background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.35); }
+    .rate.reduced { background: rgba(245,158,11,.18); border-color: rgba(245,158,11,.35); }
+    .rate.exempt { background: rgba(148,163,184,.18); border-color: rgba(148,163,184,.35); }
+    .rate.depends { background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.35); }
   </style>
 </head>
 
@@ -58,242 +90,32 @@
     <svg id="mindmap"></svg>
   </main>
 
-  <!-- CDN libs -->
+  <!-- Known-good browser builds -->
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.17.3"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17.3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12/dist/browser/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.12/dist/browser/index.iife.js"></script>
 
   <script>
     (function () {
-      const { Transformer } = window.markmaplib;
-      const { Markmap } = window.markmap;
-
-      const MAX_DEPTH = 6;     // hard cap on levels shown
+      const api = window.markmap;
       const svgEl = document.getElementById('mindmap');
       const crumbsEl = document.getElementById('crumbs');
       const titleEl = document.getElementById('hdrTitle');
 
-      const transformer = new Transformer();
+      const MAX_DEPTH = 6;
 
+      let transformer = null;
       let mm = null;
 
-      // Base tree (after transform + prune). Never mutated.
-      let baseRoot = null;
+      let baseRoot = null;        // immutable reference tree
+      const idMap = new Map();    // id -> base node
+      let selectedId = "0";       // current drill position
 
-      // Map: id -> base node (for breadcrumbs)
-      const idMap = new Map();
-
-      // Currently selected deepest node id (route)
-      // Default = root id "0"
-      let selectedId = "0";
-
-      function escapeHtml(s) {
-        return String(s)
-          .replaceAll('&', '&amp;')
-          .replaceAll('<', '&lt;')
-          .replaceAll('>', '&gt;')
-          .replaceAll('"', '&quot;')
-          .replaceAll("'", '&#39;');
+      function stripHtml(html) {
+        return String(html || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
       }
 
       function pruneToDepth(node, maxDepth, depth = 1) {
         if (!node || !Array.isArray(node.children)) return;
-        if (depth >= maxDepth) {
-          node.children = [];
-          return;
-        }
-        node.children.forEach(ch => pruneToDepth(ch, maxDepth, depth + 1));
-      }
-
-      function indexTree(node, id = "0") {
-        node.__id = id;
-        node.__allChildren = Array.isArray(node.children) ? node.children : [];
-        idMap.set(id, node);
-
-        // recurse over original children
-        node.__allChildren.forEach((ch, i) => indexTree(ch, id + "." + i));
-      }
-
-      // Returns true if node is on the selected route
-      function isOnRoute(nodeId, selId) {
-        return selId === nodeId || selId.startsWith(nodeId + ".");
-      }
-
-      // Clone base tree into a “display tree”:
-      // - Nodes on the selected route keep their children
-      // - All other nodes have children removed (collapsed)
-      function buildDisplayTree(node) {
-        const out = { ...node };
-        const allKids = node.__allChildren || [];
-        const hasKids = allKids.length > 0;
-
-        // Add chevron to nodes that *can* be expanded
-        // (use original content as-is, but append a span)
-        if (typeof out.content === "string") {
-          const chevron = hasKids ? ` <span class="mm-chevron">›</span>` : "";
-          out.content = out.content + chevron;
-        }
-
-        if (isOnRoute(node.__id, selectedId)) {
-          out.children = allKids.map(buildDisplayTree);
-        } else {
-          out.children = [];
-        }
-
-        return out;
-      }
-
-      function pathIds(selId) {
-        // "0.1.2.0" -> ["0","0.1","0.1.2","0.1.2.0"]
-        const parts = selId.split(".");
-        const ids = [];
-        for (let i = 0; i < parts.length; i++) {
-          ids.push(parts.slice(0, i + 1).join("."));
-        }
-        return ids;
-      }
-
-      function stripHtml(html) {
-        // base node content is HTML; show readable breadcrumb labels
-        const s = String(html || "");
-        return s.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
-      }
-
-      function renderBreadcrumbs() {
-        crumbsEl.innerHTML = "";
-
-        const ids = pathIds(selectedId);
-        ids.forEach((id, idx) => {
-          const n = idMap.get(id);
-          if (!n) return;
-
-          const label = stripHtml(n.content);
-
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.textContent = label || "…";
-          btn.title = label || "";
-          btn.addEventListener("click", () => {
-            selectedId = id;
-            render();
-          });
-
-          crumbsEl.appendChild(btn);
-
-          if (idx < ids.length - 1) {
-            const sep = document.createElement("span");
-            sep.className = "sep";
-            sep.textContent = "›";
-            crumbsEl.appendChild(sep);
-          }
-        });
-      }
-
-      function maybePromise(x) {
-        return (x && typeof x.then === "function") ? x : Promise.resolve(x);
-      }
-
-      function getNodeFromEvent(e) {
-        let el = e.target;
-        while (el && !el.__data__) el = el.parentNode;
-        const d = el && el.__data__;
-        if (d && typeof d === "object" && typeof d.__id === "string") return d;
-        return null;
-      }
-
-      async function render() {
-        if (!baseRoot) return;
-
-        renderBreadcrumbs();
-
-        const displayRoot = buildDisplayTree(baseRoot);
-
-        // Render / update
-        if (!mm) {
-          mm = Markmap.create(svgEl, {
-            initialExpandLevel: 99, // we control collapse by removing children
-            zoom: true,
-            pan: true,
-            autoFit: false
-          }, displayRoot);
-        } else {
-          await maybePromise(mm.setData(displayRoot, { initialExpandLevel: 99 }));
-        }
-
-        // Fit after DOM update
-        await maybePromise(mm.fit());
-      }
-
-      async function loadMarkdown(markdown) {
-        const md = String(markdown || "").trim();
-        if (!md) return;
-
-        const { root } = transformer.transform(md);
-
-        // Cap overall depth to 6
-        pruneToDepth(root, MAX_DEPTH, 1);
-
-        baseRoot = root;
-        idMap.clear();
-        indexTree(baseRoot, "0");
-
-        // Header title = root label
-        titleEl.textContent = stripHtml(baseRoot.content) || "VAT Mindmap";
-
-        // Start at root: show top-level categories only
-        selectedId = "0";
-        await render();
-      }
-
-      // Click behaviour (capture phase): drill-in / step-back
-      svgEl.addEventListener("click", async (e) => {
-        const node = getNodeFromEvent(e);
-        if (!node) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        // If user clicks the current deepest node again, step back to parent
-        if (node.__id === selectedId) {
-          const parts = selectedId.split(".");
-          if (parts.length > 1) {
-            selectedId = parts.slice(0, -1).join(".");
-          } else {
-            selectedId = "0";
-          }
-        } else {
-          selectedId = node.__id;
-        }
-
-        await render();
-      }, true);
-
-      // Esc = home (top level)
-      document.addEventListener("keydown", async (e) => {
-        if (e.key === "Escape" && baseRoot) {
-          selectedId = "0";
-          await render();
-        }
-      });
-
-      // postMessage API from Squarespace:
-      // { type: "VAT_MINDMAP_MD", markdown: "..." }
-      window.addEventListener("message", async (event) => {
-        const data = event.data;
-        if (!data || typeof data !== "object") return;
-
-        if (data.type === "VAT_MINDMAP_MD") {
-          await loadMarkdown(data.markdown || "");
-          return;
-        }
-        if (data.type === "FIT" && mm) {
-          await maybePromise(mm.fit());
-        }
-      });
-
-      // Minimal placeholder
-      loadMarkdown("# VAT Mindmap\n## Waiting for markdown…\n");
-    })();
-  </script>
-</body>
-</html>
+        if (depth >= maxDepth) { node.children = []; return; }
+        node.children.forEach(ch =>
