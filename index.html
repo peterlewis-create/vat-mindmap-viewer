@@ -4,38 +4,49 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
+
   <style>
     :root { color-scheme: dark; }
-    html, body { height: 100%; margin: 0; background: #05070b; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #05070b;
+      font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+
     header {
-      position: fixed; inset: 0 0 auto 0; height: 44px;
-      display: flex; align-items: center; gap: 12px;
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
       padding: 0 12px;
-      background: rgba(0,0,0,.55); backdrop-filter: blur(8px);
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(8px);
       border-bottom: 1px solid rgba(255,255,255,.08);
       z-index: 10;
     }
+
     header .title { font-weight: 600; letter-spacing: .2px; }
-    header .status { font-size: 12px; opacity: .85; }
-    header .spacer { flex: 1; }
-    header button {
-      height: 28px; padding: 0 10px; border-radius: 8px;
-      border: 1px solid rgba(255,255,255,.15);
-      background: rgba(255,255,255,.06);
-      color: #fff; cursor: pointer;
-    }
-    header button:hover { background: rgba(255,255,255,.10); }
+    header .status { font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
     main { position: fixed; inset: 44px 0 0 0; }
     svg#mindmap { width: 100%; height: 100%; display: block; }
+
     .hint {
-      position: fixed; left: 12px; bottom: 12px;
-      font-size: 12px; opacity: .7;
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      font-size: 12px;
+      opacity: .7;
       background: rgba(0,0,0,.35);
       border: 1px solid rgba(255,255,255,.08);
       border-radius: 10px;
       padding: 8px 10px;
+      z-index: 10;
+      max-width: 70vw;
     }
-    a { color: inherit; }
   </style>
 </head>
 
@@ -43,8 +54,6 @@
   <header>
     <div class="title">VAT Mindmap</div>
     <div id="status" class="status">Loading libraries…</div>
-    <div class="spacer"></div>
-    <button id="fitBtn" type="button">Fit</button>
   </header>
 
   <main>
@@ -52,19 +61,20 @@
   </main>
 
   <div class="hint">
-    Viewer ready for postMessage markdown.<br/>
-    If you see a blank page: open DevTools → Network and confirm the CDN scripts load.
+    Viewer ready for postMessage markdown.
   </div>
 
-  <!-- Correct browser/CDN builds (globals via window.markmap) -->
+  <!-- Browser/global builds (window.markmap) -->
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12/dist/browser/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.12/dist/browser/index.iife.js"></script>
 
   <script>
     (function () {
+      // CHANGE THIS to 5 if you want a stricter cap
+      const MAX_DEPTH = 6;
+
       const statusEl = document.getElementById('status');
-      const fitBtn = document.getElementById('fitBtn');
 
       let transformer = null;
       let mm = null;
@@ -78,7 +88,6 @@
         const m = window.markmap;
         if (!m) return null;
 
-        // In browser builds, both should exist on window.markmap
         const Markmap = m.Markmap;
         const Transformer = m.Transformer;
 
@@ -92,11 +101,24 @@
         };
       }
 
+      // Hard cap depth by pruning children beyond MAX_DEPTH
+      function pruneToDepth(node, maxDepth, depth = 1) {
+        if (!node) return node;
+        if (depth >= maxDepth) {
+          if (node.children) node.children = [];
+          return node;
+        }
+        if (Array.isArray(node.children)) {
+          node.children.forEach((c) => pruneToDepth(c, maxDepth, depth + 1));
+        }
+        return node;
+      }
+
       function renderMarkdown(markdown) {
         const api = getAPI();
         if (!api) {
           console.error('Markmap API not available. window.markmap =', window.markmap);
-          setStatus('Error: Markmap not found (CDN scripts not loaded or wrong build).', true);
+          setStatus('Error: Markmap not found (CDN scripts not loaded).', true);
           return;
         }
 
@@ -104,7 +126,11 @@
           transformer = transformer || new api.Transformer();
 
           const { root, features } = transformer.transform(String(markdown || ''));
-          // Load only assets actually used (katex/hljs etc) if present
+
+          // Apply depth cap (5–6 levels as requested)
+          pruneToDepth(root, MAX_DEPTH);
+
+          // Load optional assets if used (katex/hljs etc)
           if (typeof transformer.getUsedAssets === 'function' && api.loadCSS && api.loadJS) {
             const assets = transformer.getUsedAssets(features);
             if (assets?.styles?.length) api.loadCSS(assets.styles);
@@ -125,11 +151,11 @@
         }
       }
 
-      // Accept markdown from Squarespace (or anywhere) via postMessage
+      // Receive markdown via postMessage
       // Supported payloads:
-      // 1) string: "## Title\n- item"
-      // 2) object: { type: "VAT_MINDMAP_MD", markdown: "..." }
-      // 3) object: { type: "FIT" }
+      // 1) string
+      // 2) { type: "VAT_MINDMAP_MD", markdown: "..." }
+      // 3) { type: "FIT" }
       window.addEventListener('message', (event) => {
         const data = event.data;
         if (!data) return;
@@ -154,17 +180,13 @@
         }
       });
 
-      fitBtn.addEventListener('click', () => {
-        if (mm) mm.fit();
-      });
+      // Initial placeholder (kept minimal)
+      renderMarkdown('# VAT Mindmap\n## Status\n- Waiting for markdown…\n');
 
-      // Initial content so you can see it working immediately
-      renderMarkdown(
-        '# VAT Mindmap\n' +
-        '## Viewer status\n' +
-        '- Libraries loaded via CDN\n' +
-        '- Ready to receive markdown via postMessage\n'
-      );
+      // Confirm libs
+      const ok = !!getAPI();
+      if (ok) setStatus('Rendered. Waiting for updates…', false);
+      else setStatus('Error: libraries did not load.', true);
     })();
   </script>
 </body>
