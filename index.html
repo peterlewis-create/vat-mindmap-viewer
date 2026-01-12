@@ -1,67 +1,171 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VAT Mindmap</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VAT Mindmap Viewer</title>
   <style>
-    body {
-      margin: 0;
-      background: radial-gradient(circle at center, #0d1b2a, #000);
-      color: white;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      overflow: hidden;
-    }
-    #mindmap {
-      width: 100vw;
-      height: 100vh;
-    }
-    #header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 8px 12px;
-      font-weight: bold;
+    :root { color-scheme: dark; }
+    html, body { height: 100%; margin: 0; background: #05070b; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    header {
+      position: fixed; inset: 0 0 auto 0; height: 44px;
+      display: flex; align-items: center; gap: 12px;
+      padding: 0 12px;
+      background: rgba(0,0,0,.55); backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(255,255,255,.08);
       z-index: 10;
-      border-bottom: 1px solid #00aaff;
     }
+    header .title { font-weight: 600; letter-spacing: .2px; }
+    header .status { font-size: 12px; opacity: .85; }
+    header .spacer { flex: 1; }
+    header button {
+      height: 28px; padding: 0 10px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.15);
+      background: rgba(255,255,255,.06);
+      color: #fff; cursor: pointer;
+    }
+    header button:hover { background: rgba(255,255,255,.10); }
+    main { position: fixed; inset: 44px 0 0 0; }
+    svg#mindmap { width: 100%; height: 100%; display: block; }
+    .hint {
+      position: fixed; left: 12px; bottom: 12px;
+      font-size: 12px; opacity: .7;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+    a { color: inherit; }
   </style>
 </head>
 
 <body>
-  <div id="header">VAT Mindmap</div>
-  <svg id="mindmap"></svg>
+  <header>
+    <div class="title">VAT Mindmap</div>
+    <div id="status" class="status">Loading libraries…</div>
+    <div class="spacer"></div>
+    <button id="fitBtn" type="button">Fit</button>
+  </header>
 
-  <!-- Load D3 and Markmap (stable versions) -->
-  <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17.3/dist/browser/index.min.js"></script>
+  <main>
+    <svg id="mindmap"></svg>
+  </main>
+
+  <div class="hint">
+    Viewer ready for postMessage markdown.<br/>
+    If you see a blank page: open DevTools → Network and confirm the CDN scripts load.
+  </div>
+
+  <!-- Correct browser/CDN builds (globals via window.markmap) -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12/dist/browser/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.12/dist/browser/index.iife.js"></script>
 
   <script>
-    // Ensure DOM and libraries are fully loaded before creating the map
-    window.addEventListener("load", () => {
-      if (!window.markmap) {
-        console.error("Markmap not found!");
-        return;
+    (function () {
+      const statusEl = document.getElementById('status');
+      const fitBtn = document.getElementById('fitBtn');
+
+      let transformer = null;
+      let mm = null;
+
+      function setStatus(msg, isError) {
+        statusEl.textContent = msg;
+        statusEl.style.opacity = isError ? '1' : '.85';
       }
 
-      const { Markmap, Transformer } = window.markmap;
-      const transformer = new Transformer();
+      function getAPI() {
+        const m = window.markmap;
+        if (!m) return null;
 
-      const md = `
-# VAT
-## Animal feed
-- Pet food exceptions
-- Working animals
-## Food & drink
-- Catering rules
-- Takeaway vs eat-in
-`;
+        // In browser builds, both should exist on window.markmap
+        const Markmap = m.Markmap;
+        const Transformer = m.Transformer;
 
-      const { root } = transformer.transform(md);
-      Markmap.create("#mindmap", { initialExpandLevel: 2 }, root);
-    });
+        if (!Markmap || !Transformer) return null;
+
+        return {
+          Markmap,
+          Transformer,
+          loadCSS: m.loadCSS,
+          loadJS: m.loadJS,
+        };
+      }
+
+      function renderMarkdown(markdown) {
+        const api = getAPI();
+        if (!api) {
+          console.error('Markmap API not available. window.markmap =', window.markmap);
+          setStatus('Error: Markmap not found (CDN scripts not loaded or wrong build).', true);
+          return;
+        }
+
+        try {
+          transformer = transformer || new api.Transformer();
+
+          const { root, features } = transformer.transform(String(markdown || ''));
+          // Load only assets actually used (katex/hljs etc) if present
+          if (typeof transformer.getUsedAssets === 'function' && api.loadCSS && api.loadJS) {
+            const assets = transformer.getUsedAssets(features);
+            if (assets?.styles?.length) api.loadCSS(assets.styles);
+            if (assets?.scripts?.length) api.loadJS(assets.scripts);
+          }
+
+          if (!mm) {
+            mm = api.Markmap.create('svg#mindmap', null, root);
+          } else {
+            mm.setData(root);
+          }
+
+          requestAnimationFrame(() => mm.fit());
+          setStatus('Rendered. Waiting for updates…', false);
+        } catch (e) {
+          console.error(e);
+          setStatus('Error rendering markdown (see console).', true);
+        }
+      }
+
+      // Accept markdown from Squarespace (or anywhere) via postMessage
+      // Supported payloads:
+      // 1) string: "## Title\n- item"
+      // 2) object: { type: "VAT_MINDMAP_MD", markdown: "..." }
+      // 3) object: { type: "FIT" }
+      window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data) return;
+
+        if (typeof data === 'string') {
+          renderMarkdown(data);
+          return;
+        }
+
+        if (typeof data === 'object') {
+          const t = String(data.type || '').toUpperCase();
+
+          if (t === 'FIT') {
+            if (mm) mm.fit();
+            return;
+          }
+
+          if (t === 'VAT_MINDMAP_MD' || t === 'MARKMAP_MD' || t === 'MARKDOWN') {
+            renderMarkdown(data.markdown);
+            return;
+          }
+        }
+      });
+
+      fitBtn.addEventListener('click', () => {
+        if (mm) mm.fit();
+      });
+
+      // Initial content so you can see it working immediately
+      renderMarkdown(
+        '# VAT Mindmap\n' +
+        '## Viewer status\n' +
+        '- Libraries loaded via CDN\n' +
+        '- Ready to receive markdown via postMessage\n'
+      );
+    })();
   </script>
 </body>
 </html>
