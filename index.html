@@ -4,61 +4,59 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
+
   <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      background: #000;
-      color: rgba(255,255,255,.85);
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    }
-    #wrap {
-      height: 100%;
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-    }
-    #topbar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-bottom: 1px solid rgba(255,255,255,.08);
+    :root { color-scheme: dark; }
+    html, body { height: 100%; margin: 0; background: #0b0f14; color: rgba(255,255,255,.88);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+
+    header {
+      position: fixed; inset: 0 0 auto 0; height: 48px;
+      display: flex; align-items: center; gap: 12px;
+      padding: 0 12px;
       background: rgba(0,0,0,.55);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(8px);
+      z-index: 10;
       user-select: none;
     }
-    #title {
-      font-weight: 600;
-      letter-spacing: .2px;
+    .title { font-weight: 650; letter-spacing: .2px; }
+    .crumbs { display: flex; gap: 6px; align-items: center; overflow: hidden; }
+    .crumbs button {
+      appearance: none; border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06); color: rgba(255,255,255,.9);
+      border-radius: 10px; padding: 6px 10px; font: inherit;
+      cursor: pointer; white-space: nowrap;
+      max-width: 240px; overflow: hidden; text-overflow: ellipsis;
     }
-    #status {
-      font-size: 12px;
-      opacity: .8;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .crumbs .sep { opacity: .5; }
+    .hint { margin-left: auto; font-size: 12px; opacity: .72; white-space: nowrap; }
+
+    main { position: fixed; inset: 48px 0 0 0; }
+    svg#mindmap { width: 100%; height: 100%; display: block; }
+
+    /* Make nodes look more like “boxes” */
+    svg#mindmap foreignObject > div {
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 10px;
+      padding: 6px 10px;
+      box-shadow: 0 8px 18px rgba(0,0,0,.25);
     }
-    #hint {
-      margin-left: auto;
-      font-size: 12px;
-      opacity: .65;
-      white-space: nowrap;
-    }
-    #mindmap {
-      width: 100%;
-      height: calc(100% - 44px);
-    }
+    svg#mindmap .mm-chevron { opacity: .65; margin-left: 8px; }
   </style>
 </head>
+
 <body>
-  <div id="wrap">
-    <div id="topbar">
-      <div id="title">VAT Mindmap</div>
-      <div id="status">Waiting for updates…</div>
-      <div id="hint">Double-click a node to focus. Esc to reset.</div>
-    </div>
+  <header>
+    <div class="title" id="hdrTitle">VAT Mindmap</div>
+    <div class="crumbs" id="crumbs"></div>
+    <div class="hint">Click to drill in. Click same node again to step back. Esc = Home.</div>
+  </header>
+
+  <main>
     <svg id="mindmap"></svg>
-  </div>
+  </main>
 
   <!-- CDN libs -->
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -70,211 +68,231 @@
       const { Transformer } = window.markmaplib;
       const { Markmap } = window.markmap;
 
-      const svgEl = document.querySelector('#mindmap');
-      const statusEl = document.querySelector('#status');
-
-      const MAX_DEPTH = 6;          // hard cap on levels shown
-      const OVERVIEW_EXPAND = 3;    // how “open” the full map starts (tune 2–4)
-      const FOCUS_EXPAND = 99;      // fully expand in focus view
+      const MAX_DEPTH = 6;     // hard cap on levels shown
+      const svgEl = document.getElementById('mindmap');
+      const crumbsEl = document.getElementById('crumbs');
+      const titleEl = document.getElementById('hdrTitle');
 
       const transformer = new Transformer();
 
       let mm = null;
 
-      // Root as displayed right now (can be focused sub-tree)
-      let currentRoot = null;
+      // Base tree (after transform + prune). Never mutated.
+      let baseRoot = null;
 
-      // Full tree after prune (overview)
-      let fullRoot = null;
+      // Map: id -> base node (for breadcrumbs)
+      const idMap = new Map();
 
-      // Stack so you can focus multiple times (Esc resets all the way back)
-      const focusStack = [];
+      // Currently selected deepest node id (route)
+      // Default = root id "0"
+      let selectedId = "0";
 
-      function setStatus(msg) {
-        statusEl.textContent = msg;
-        console.log('[VAT Mindmap]', msg);
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
       }
 
-      function attachParents(node, parent) {
-        node.__parent = parent || null;
-        if (Array.isArray(node.children)) {
-          node.children.forEach(ch => attachParents(ch, node));
-        }
-      }
-
-      // depth is 1-based relative to the Markdown # root
-      function pruneToDepth(node, maxDepth, depth) {
-        const d = depth || 1;
-        if (!Array.isArray(node.children)) return;
-
-        if (d >= maxDepth) {
+      function pruneToDepth(node, maxDepth, depth = 1) {
+        if (!node || !Array.isArray(node.children)) return;
+        if (depth >= maxDepth) {
           node.children = [];
           return;
         }
-        node.children.forEach(ch => pruneToDepth(ch, maxDepth, d + 1));
+        node.children.forEach(ch => pruneToDepth(ch, maxDepth, depth + 1));
       }
 
-      // clone a node + descendants, dropping transient fields
-      function cloneSubtree(node) {
-        const { children, state, __parent, ...rest } = node;
-        const out = { ...rest };
-        out.children = Array.isArray(children) ? children.map(cloneSubtree) : [];
+      function indexTree(node, id = "0") {
+        node.__id = id;
+        node.__allChildren = Array.isArray(node.children) ? node.children : [];
+        idMap.set(id, node);
+
+        // recurse over original children
+        node.__allChildren.forEach((ch, i) => indexTree(ch, id + "." + i));
+      }
+
+      // Returns true if node is on the selected route
+      function isOnRoute(nodeId, selId) {
+        return selId === nodeId || selId.startsWith(nodeId + ".");
+      }
+
+      // Clone base tree into a “display tree”:
+      // - Nodes on the selected route keep their children
+      // - All other nodes have children removed (collapsed)
+      function buildDisplayTree(node) {
+        const out = { ...node };
+        const allKids = node.__allChildren || [];
+        const hasKids = allKids.length > 0;
+
+        // Add chevron to nodes that *can* be expanded
+        // (use original content as-is, but append a span)
+        if (typeof out.content === "string") {
+          const chevron = hasKids ? ` <span class="mm-chevron">›</span>` : "";
+          out.content = out.content + chevron;
+        }
+
+        if (isOnRoute(node.__id, selectedId)) {
+          out.children = allKids.map(buildDisplayTree);
+        } else {
+          out.children = [];
+        }
+
         return out;
       }
 
-      // Build a “path + subtree” tree:
-      // root -> ... -> target -> (target descendants)
-      function buildFocusTree(targetNode) {
-        // Walk up via __parent
-        const chain = [];
-        let n = targetNode;
-        while (n) {
-          chain.push(n);
-          n = n.__parent;
+      function pathIds(selId) {
+        // "0.1.2.0" -> ["0","0.1","0.1.2","0.1.2.0"]
+        const parts = selId.split(".");
+        const ids = [];
+        for (let i = 0; i < parts.length; i++) {
+          ids.push(parts.slice(0, i + 1).join("."));
         }
-        chain.reverse(); // root first
-
-        // If user double-clicks the current root, just show that subtree (no path)
-        if (chain.length <= 1) {
-          return cloneSubtree(targetNode);
-        }
-
-        // Build path nodes without siblings
-        const rootClone = cloneSubtree(chain[0]);
-        // wipe children; we will build a single-child chain
-        rootClone.children = [];
-
-        let cursor = rootClone;
-        for (let i = 1; i < chain.length - 1; i++) {
-          const mid = cloneSubtree(chain[i]);
-          mid.children = [];
-          cursor.children = [mid];
-          cursor = mid;
-        }
-
-        // Attach full subtree at the end
-        const focused = cloneSubtree(chain[chain.length - 1]);
-        cursor.children = [focused];
-
-        return rootClone;
+        return ids;
       }
 
-      async function renderRoot(root, expandLevel) {
-        attachParents(root, null);
-
-        if (!mm) {
-          mm = Markmap.create(svgEl, {
-            initialExpandLevel: expandLevel,
-            zoom: true,
-            pan: true,
-            autoFit: false,
-            toggleRecursively: false,
-          }, root);
-        } else {
-          // setData is async in newer versions; await it to avoid “half render” states. :contentReference[oaicite:0]{index=0}
-          await mm.setData(root, { initialExpandLevel: expandLevel });
-        }
-
-        currentRoot = root;
-
-        // Fit after render
-        await mm.fit();
+      function stripHtml(html) {
+        // base node content is HTML; show readable breadcrumb labels
+        const s = String(html || "");
+        return s.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
       }
 
-      async function renderMarkdown(md) {
-        const markdown = String(md || '').trim();
-        if (!markdown) {
-          setStatus('No markdown received.');
-          return;
-        }
+      function renderBreadcrumbs() {
+        crumbsEl.innerHTML = "";
 
-        const { root } = transformer.transform(markdown);
+        const ids = pathIds(selectedId);
+        ids.forEach((id, idx) => {
+          const n = idMap.get(id);
+          if (!n) return;
 
-        // Cap depth to 6 levels
-        pruneToDepth(root, MAX_DEPTH, 1);
-        attachParents(root, null);
+          const label = stripHtml(n.content);
 
-        fullRoot = root;
-        focusStack.length = 0;
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = label || "…";
+          btn.title = label || "";
+          btn.addEventListener("click", () => {
+            selectedId = id;
+            render();
+          });
 
-        setStatus('Rendered. Double-click to focus. Esc to reset.');
-        await renderRoot(fullRoot, OVERVIEW_EXPAND);
+          crumbsEl.appendChild(btn);
+
+          if (idx < ids.length - 1) {
+            const sep = document.createElement("span");
+            sep.className = "sep";
+            sep.textContent = "›";
+            crumbsEl.appendChild(sep);
+          }
+        });
       }
 
-      async function focusOnNode(node) {
-        if (!node) return;
-
-        // push current view to stack so user can “drill in” repeatedly
-        if (currentRoot) focusStack.push(currentRoot);
-
-        const froot = buildFocusTree(node);
-        setStatus('Focused. Esc to reset.');
-        await renderRoot(froot, FOCUS_EXPAND);
-
-        // highlight focused node (optional; harmless if not visible)
-        try { await mm.setHighlight(null); } catch (_) {}
+      function maybePromise(x) {
+        return (x && typeof x.then === "function") ? x : Promise.resolve(x);
       }
 
-      async function resetFocus() {
-        if (!fullRoot) return;
-        focusStack.length = 0;
-        setStatus('Rendered. Double-click to focus. Esc to reset.');
-        await renderRoot(fullRoot, OVERVIEW_EXPAND);
-      }
-
-      // Identify node from DOM element (d3 binds node data onto elements as __data__)
       function getNodeFromEvent(e) {
         let el = e.target;
         while (el && !el.__data__) el = el.parentNode;
         const d = el && el.__data__;
-        if (d && typeof d === 'object' && typeof d.content === 'string') return d;
+        if (d && typeof d === "object" && typeof d.__id === "string") return d;
         return null;
       }
 
-      // Focus on DOUBLE-CLICK so you still keep Markmap’s normal click-to-toggle behaviour. :contentReference[oaicite:1]{index=1}
-      svgEl.addEventListener('dblclick', async (e) => {
+      async function render() {
+        if (!baseRoot) return;
+
+        renderBreadcrumbs();
+
+        const displayRoot = buildDisplayTree(baseRoot);
+
+        // Render / update
+        if (!mm) {
+          mm = Markmap.create(svgEl, {
+            initialExpandLevel: 99, // we control collapse by removing children
+            zoom: true,
+            pan: true,
+            autoFit: false
+          }, displayRoot);
+        } else {
+          await maybePromise(mm.setData(displayRoot, { initialExpandLevel: 99 }));
+        }
+
+        // Fit after DOM update
+        await maybePromise(mm.fit());
+      }
+
+      async function loadMarkdown(markdown) {
+        const md = String(markdown || "").trim();
+        if (!md) return;
+
+        const { root } = transformer.transform(md);
+
+        // Cap overall depth to 6
+        pruneToDepth(root, MAX_DEPTH, 1);
+
+        baseRoot = root;
+        idMap.clear();
+        indexTree(baseRoot, "0");
+
+        // Header title = root label
+        titleEl.textContent = stripHtml(baseRoot.content) || "VAT Mindmap";
+
+        // Start at root: show top-level categories only
+        selectedId = "0";
+        await render();
+      }
+
+      // Click behaviour (capture phase): drill-in / step-back
+      svgEl.addEventListener("click", async (e) => {
         const node = getNodeFromEvent(e);
-        if (node) {
-          e.preventDefault();
-          e.stopPropagation();
-          await focusOnNode(node);
+        if (!node) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        // If user clicks the current deepest node again, step back to parent
+        if (node.__id === selectedId) {
+          const parts = selectedId.split(".");
+          if (parts.length > 1) {
+            selectedId = parts.slice(0, -1).join(".");
+          } else {
+            selectedId = "0";
+          }
+        } else {
+          selectedId = node.__id;
+        }
+
+        await render();
+      }, true);
+
+      // Esc = home (top level)
+      document.addEventListener("keydown", async (e) => {
+        if (e.key === "Escape" && baseRoot) {
+          selectedId = "0";
+          await render();
         }
       });
 
-      // If focused, clicking empty background resets
-      svgEl.addEventListener('click', async (e) => {
-        if (!fullRoot) return;
-        if (focusStack.length === 0 && currentRoot === fullRoot) return;
+      // postMessage API from Squarespace:
+      // { type: "VAT_MINDMAP_MD", markdown: "..." }
+      window.addEventListener("message", async (event) => {
+        const data = event.data;
+        if (!data || typeof data !== "object") return;
 
-        const node = getNodeFromEvent(e);
-        if (!node) {
-          await resetFocus();
-        }
-      });
-
-      // Esc resets to full map
-      document.addEventListener('keydown', async (e) => {
-        if (e.key === 'Escape') {
-          await resetFocus();
-        }
-      });
-
-      // postMessage interface
-      window.addEventListener('message', async (event) => {
-        const data = event.data || {};
-        if (!data || typeof data !== 'object') return;
-
-        if (data.type === 'VAT_MINDMAP_MD') {
-          await renderMarkdown(data.markdown || '');
+        if (data.type === "VAT_MINDMAP_MD") {
+          await loadMarkdown(data.markdown || "");
           return;
         }
-
-        if (data.type === 'FIT' && mm) {
-          await mm.fit();
+        if (data.type === "FIT" && mm) {
+          await maybePromise(mm.fit());
         }
       });
 
-      setStatus('Waiting for updates…');
+      // Minimal placeholder
+      loadMarkdown("# VAT Mindmap\n## Waiting for markdown…\n");
     })();
   </script>
 </body>
