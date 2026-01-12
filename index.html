@@ -118,4 +118,186 @@
       function pruneToDepth(node, maxDepth, depth = 1) {
         if (!node || !Array.isArray(node.children)) return;
         if (depth >= maxDepth) { node.children = []; return; }
-        node.children.forEach(ch =>
+        node.children.forEach(ch => pruneToDepth(ch, maxDepth, depth + 1));
+      }
+
+      function indexTree(node, id = "0") {
+        node.__id = id;
+        node.__baseContent = node.content; // keep original label (no chevrons/badges)
+        node.__allChildren = Array.isArray(node.children) ? node.children : [];
+        idMap.set(id, node);
+        node.__allChildren.forEach((ch, i) => indexTree(ch, id + "." + i));
+      }
+
+      function isOnRoute(nodeId, selId) {
+        return selId === nodeId || selId.startsWith(nodeId + ".");
+      }
+
+      function decorateContent(node) {
+        const raw = String(node.__baseContent || "");
+        const txt = stripHtml(raw).toLowerCase();
+
+        // VAT badge if this node is a VAT rate leaf
+        if (txt.startsWith("vat rate:")) {
+          let cls = "depends";
+          if (txt.includes("zero")) cls = "zero";
+          else if (txt.includes("standard")) cls = "standard";
+          else if (txt.includes("reduced")) cls = "reduced";
+          else if (txt.includes("exempt")) cls = "exempt";
+
+          const label = stripHtml(raw);
+          return `<span class="rate ${cls}">${label}</span>`;
+        }
+
+        // Chevron for nodes that can expand
+        const hasKids = (node.__allChildren || []).length > 0;
+        return raw + (hasKids ? ` <span class="mm-chevron">›</span>` : "");
+      }
+
+      function buildDisplayTree(node) {
+        const out = { ...node };
+        out.content = decorateContent(node);
+
+        if (isOnRoute(node.__id, selectedId)) {
+          out.children = (node.__allChildren || []).map(buildDisplayTree);
+        } else {
+          out.children = [];
+        }
+        return out;
+      }
+
+      function pathIds(selId) {
+        const parts = selId.split(".");
+        const ids = [];
+        for (let i = 0; i < parts.length; i++) ids.push(parts.slice(0, i + 1).join("."));
+        return ids;
+      }
+
+      function renderBreadcrumbs() {
+        crumbsEl.innerHTML = "";
+        const ids = pathIds(selectedId);
+
+        ids.forEach((id, idx) => {
+          const n = idMap.get(id);
+          if (!n) return;
+
+          const label = stripHtml(n.__baseContent);
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = label || "…";
+          btn.title = label || "";
+          btn.addEventListener("click", () => { selectedId = id; render(); });
+          crumbsEl.appendChild(btn);
+
+          if (idx < ids.length - 1) {
+            const sep = document.createElement("span");
+            sep.className = "sep";
+            sep.textContent = "›";
+            crumbsEl.appendChild(sep);
+          }
+        });
+      }
+
+      function maybePromise(x) {
+        return (x && typeof x.then === "function") ? x : Promise.resolve(x);
+      }
+
+      function getNodeFromEvent(e) {
+        let el = e.target;
+        while (el && !el.__data__) el = el.parentNode;
+        const d = el && el.__data__;
+        if (d && typeof d === "object" && typeof d.__id === "string") return d;
+        return null;
+      }
+
+      async function render() {
+        if (!baseRoot) return;
+
+        renderBreadcrumbs();
+        const displayRoot = buildDisplayTree(baseRoot);
+
+        if (!mm) {
+          mm = api.Markmap.create(svgEl, {
+            initialExpandLevel: 99, // we collapse by removing children, not toggles
+            zoom: true,
+            pan: true,
+            autoFit: false
+          }, displayRoot);
+        } else {
+          await maybePromise(mm.setData(displayRoot, { initialExpandLevel: 99 }));
+        }
+
+        await maybePromise(mm.fit());
+      }
+
+      async function loadMarkdown(markdown) {
+        const md = String(markdown || "").trim();
+        if (!md) return;
+
+        // Safety: detect missing Markmap libs
+        if (!api || !api.Markmap || !api.Transformer) {
+          titleEl.textContent = "VAT Mindmap (ERROR)";
+          crumbsEl.innerHTML = "";
+          console.error("Markmap libraries missing. window.markmap =", window.markmap);
+          return;
+        }
+
+        transformer = transformer || new api.Transformer();
+
+        const { root } = transformer.transform(md);
+        pruneToDepth(root, MAX_DEPTH, 1);
+
+        baseRoot = root;
+        idMap.clear();
+        indexTree(baseRoot, "0");
+
+        titleEl.textContent = stripHtml(baseRoot.__baseContent) || "VAT Mindmap";
+        selectedId = "0";
+
+        await render();
+      }
+
+      // Click: drill in / step back
+      svgEl.addEventListener("click", async (e) => {
+        const node = getNodeFromEvent(e);
+        if (!node) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (node.__id === selectedId) {
+          const parts = selectedId.split(".");
+          selectedId = (parts.length > 1) ? parts.slice(0, -1).join(".") : "0";
+        } else {
+          selectedId = node.__id;
+        }
+
+        await render();
+      }, true);
+
+      // Esc: home
+      document.addEventListener("keydown", async (e) => {
+        if (e.key === "Escape" && baseRoot) {
+          selectedId = "0";
+          await render();
+        }
+      });
+
+      // postMessage from Squarespace
+      window.addEventListener("message", async (event) => {
+        const data = event.data;
+        if (!data || typeof data !== "object") return;
+
+        if (data.type === "VAT_MINDMAP_MD") {
+          await loadMarkdown(data.markdown || "");
+        } else if (data.type === "FIT" && mm) {
+          await maybePromise(mm.fit());
+        }
+      });
+
+      // Placeholder so you always see *something*
+      loadMarkdown("# VAT Mindmap\n## Waiting for markdown…\n");
+    })();
+  </script>
+</body>
+</html>
