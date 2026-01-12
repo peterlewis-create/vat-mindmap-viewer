@@ -27,12 +27,15 @@
     }
     .btn:hover{ background: rgba(0,0,0,.28); }
 
+    /* EMBED MODE: hide viewer buttons + hint when embedded */
+    html.embed header .h-right { display: none !important; }
+    html.embed .hint { display: none !important; }
+
     #wrap{ position: fixed; inset: 0; }
     svg{ width:100%; height:100%; display:block; }
 
     .link{ fill:none; stroke: rgba(148,163,184,.35); stroke-width: 2; }
 
-    /* Node cards */
     .card{
       display:inline-flex; align-items:center; gap:10px;
       padding: 10px 12px; border-radius: 10px;
@@ -52,7 +55,6 @@
       background: rgba(0,0,0,.18); flex:0 0 auto;
     }
 
-    /* VAT pills */
     .pill{
       display:inline-flex; align-items:center;
       padding: 4px 10px; border-radius: 999px;
@@ -96,10 +98,14 @@
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script>
     (function () {
-      const MAX_DEPTH = 6;                // your hard cap
-      const COLLAPSE_FROM_DEPTH = 2;      // show root + top categories; collapse below
-      const NODE_GAP_X = 64;              // vertical spacing
-      const NODE_GAP_Y = 280;             // horizontal spacing
+      const params = new URLSearchParams(location.search);
+      const EMBED = params.get("embed") === "1" || (window.self !== window.top);
+      if (EMBED) document.documentElement.classList.add("embed");
+
+      const MAX_DEPTH = 6;
+      const COLLAPSE_FROM_DEPTH = 2;
+      const NODE_GAP_X = 64;
+      const NODE_GAP_Y = 280;
 
       const svg = d3.select("#svg");
       const g = svg.append("g");
@@ -112,7 +118,6 @@
       let zoom = null;
 
       function decodeEntities(s) {
-        // Converts "&amp;" -> "&" and "&#x2014;" -> "—"
         const ta = document.createElement("textarea");
         ta.innerHTML = String(s ?? "");
         return ta.value;
@@ -120,11 +125,9 @@
 
       function setSub(msg) { subEl.textContent = msg; }
 
-      // Zoom / pan
       zoom = d3.zoom().scaleExtent([0.35, 2.6]).on("zoom", (event) => g.attr("transform", event.transform));
       svg.call(zoom);
 
-      // Parse markdown headings only (# .. ######)
       function parseHeadings(md) {
         const lines = String(md || "").split(/\r?\n/);
         const items = [];
@@ -144,7 +147,7 @@
 
         for (let i = 1; i < items.length; i++) {
           const { level, text } = items[i];
-          const relDepth = (level - baseLevel) + 1; // root=1
+          const relDepth = (level - baseLevel) + 1;
           if (relDepth > MAX_DEPTH) continue;
 
           const node = { name: text, children: [] };
@@ -196,15 +199,14 @@
         const links = root.links();
         nodes.forEach(d => { d.y = d.depth * NODE_GAP_Y; });
 
-        // links
         const linkSel = g.selectAll("path.link").data(links, d => d.target.id);
         linkSel.enter().append("path").attr("class", "link")
           .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
         linkSel.attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
         linkSel.exit().remove();
 
-        // nodes
         const nodeSel = g.selectAll("g.node").data(nodes, d => d.id);
+
         const nodeEnter = nodeSel.enter().append("g")
           .attr("class", "node")
           .attr("transform", d => `translate(${d.y},${d.x})`)
@@ -264,8 +266,10 @@
         setTimeout(fitToScreen, 40);
       }
 
-      btnFit.addEventListener("click", fitToScreen);
-      btnHome.addEventListener("click", home);
+      // Buttons (visible only when NOT embedded)
+      if (btnFit) btnFit.addEventListener("click", fitToScreen);
+      if (btnHome) btnHome.addEventListener("click", home);
+
       document.addEventListener("keydown", (e) => { if (e.key === "Escape") home(); });
 
       async function loadMarkdown(md) {
@@ -283,7 +287,6 @@
         root = d3.hierarchy(treeObj, d => d.children);
         let i = 0; root.each(d => d.id = ++i);
 
-        // initial collapse
         if (root.children) root.children.forEach(ch => collapseFromDepth(ch, 1));
 
         g.selectAll("*").remove();
@@ -291,22 +294,6 @@
         setTimeout(fitToScreen, 40);
       }
 
-      // Messages from Squarespace overlay:
-      // { type: "VAT_MINDMAP_MD", markdown: "..." }
-      // { type: "FIT" }
-      // { type: "HOME" }
       window.addEventListener("message", (event) => {
         const data = event.data || {};
-        if (typeof data !== "object") return;
-        if (data.type === "VAT_MINDMAP_MD") loadMarkdown(data.markdown || "");
-        if (data.type === "FIT") fitToScreen();
-        if (data.type === "HOME") home();
-      });
-
-      // Placeholder
-      loadMarkdown(`# UK VAT Taxonomy: Animals, Food, and Catering
-## Waiting for markdown…`);
-    })();
-  </script>
-</body>
-</html>
+        if (typeof data !== "ob
