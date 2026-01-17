@@ -18,7 +18,10 @@
       background:var(--bg); color:var(--text);
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
-    #svg{ width:100vw; height:100vh; display:block; }
+    #svg{
+      width:100vw; height:100vh; display:block;
+      background: var(--bg);
+    }
 
     #header{ position:fixed; top:18px; left:18px; z-index:9999; pointer-events:none; }
     #title{ font-size:34px; font-weight:900; margin:0; text-shadow:0 6px 20px rgba(0,0,0,.55); }
@@ -48,15 +51,15 @@
       pointer-events:none;
     }
 
-    /* Node boxes (LLM-like) */
+    /* Node boxes (LLM-like: compact + readable) */
     .markmap-foreign{
       background: var(--node) !important;
       border-radius: 10px !important;
-      padding: 8px 14px !important;
+      padding: 7px 12px !important;
       color: #fff !important;
-      font-size: 14px !important;
+      font-size: 13px !important;
       font-weight: 700 !important;
-      line-height: 1.2 !important;
+      line-height: 1.15 !important;
       box-shadow: 0 10px 22px rgba(0,0,0,.35) !important;
       border: 1px solid rgba(255,255,255,.10) !important;
       white-space: nowrap !important;
@@ -92,19 +95,22 @@
     const subline = document.getElementById('subline');
     const svg = document.getElementById('svg');
 
-    function safeStop(e){
-      e.preventDefault(); e.stopPropagation();
+    function stop(e){
+      e.preventDefault();
+      e.stopPropagation();
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
     }
 
     function getQS(name){
       try{
         const v = new URLSearchParams(location.search).get(name);
-        return v ? decodeURIComponent(v) : '';
+        if (!v) return '';
+        // URLSearchParams is already decoded; DO NOT decodeURIComponent again.
+        return v;
       } catch(e){ return ''; }
     }
 
-    // If libraries failed to load, show it clearly (prevents “blank screen mystery”)
+    // If libraries failed to load, show it clearly
     if (!window.markmap || !window.markmap.Transformer || !window.markmap.Markmap){
       status.textContent = "Viewer error: markmap libraries did not load (blocked or unavailable).";
       window.parent && window.parent.postMessage({ type:'VAT_READY' }, '*');
@@ -117,16 +123,30 @@
 
     let fullRoot = null;
     let fullDepth = 2;
-    let focusNode = null;
+
+    let focusNode = null;     // <-- store MARKMAP NODE (not d3 hierarchy node)
     let focusDepth = 4;
 
     function clonePruned(node, maxDepth, depthNow){
-      const out = { content: node.content, payload: node.payload || {} };
-      const kids = Array.isArray(node.children) ? node.children : [];
+      const out = { content: String(node && node.content ? node.content : ''), payload: node.payload || {} };
+      const kids = Array.isArray(node && node.children) ? node.children : [];
       if (depthNow < maxDepth && kids.length){
         out.children = kids.map(ch => clonePruned(ch, maxDepth, depthNow + 1));
       }
       return out;
+    }
+
+    function nodeCount(){
+      return svg.querySelectorAll('g.markmap-node').length;
+    }
+
+    function multiFit(){
+      if (!mm) return;
+      // Fit several times to avoid the "blank" race condition
+      const times = [0, 60, 140, 260, 420];
+      times.forEach(t => {
+        setTimeout(() => { try { mm.fit(); } catch(e){} }, t);
+      });
     }
 
     function render(){
@@ -138,38 +158,42 @@
 
       if (!mm){
         mm = Markmap.create(svg, {
-          autoFit: true,
-          duration: 250,
-          spacingHorizontal: 115,
-          spacingVertical: 24
+          autoFit: false,       // IMPORTANT: we control fit ourselves (more stable)
+          duration: 0,
+          spacingHorizontal: 110,
+          spacingVertical: 22
         }, rootToShow);
       } else {
         mm.setData(rootToShow);
       }
 
-      setTimeout(() => { try { mm.fit(); } catch(e){} }, 0);
+      multiFit();
 
-      status.textContent = focusNode
-        ? `Drilled branch (level ${focusDepth}). Use Resize to return.`
-        : `Overview (level ${fullDepth}). Click a node to drill down.`;
-
-      subline.textContent = focusNode
-        ? `Expand level: ${focusDepth} (drilled — Resize to return)`
-        : `Expand level: ${fullDepth} (click a node to drill down)`;
-
-      // Node click → drill down
+      // Attach drill-down click handler (use d.data)
       setTimeout(() => {
         try{
           const sel = d3.select(svg).selectAll('g.markmap-node');
           sel.on('click', (event, d) => {
             event.preventDefault();
             event.stopPropagation();
-            focusNode = d;
+            const markmapNode = d && d.data ? d.data : null;
+            if (!markmapNode) return;
+            focusNode = markmapNode;
             focusDepth = Math.max(4, fullDepth + 2);
             render();
           });
         } catch(e){}
-      }, 30);
+      }, 80);
+
+      setTimeout(() => {
+        const n = nodeCount();
+        status.textContent = focusNode
+          ? `Drilled branch (level ${focusDepth}). Nodes: ${n}. Use Resize to return.`
+          : `Overview (level ${fullDepth}). Nodes: ${n}. Click a node to drill down.`;
+        subline.textContent = focusNode
+          ? `Expand level: ${focusDepth} (drilled — Resize to return)`
+          : `Expand level: ${fullDepth} (click a node to drill down)`;
+      }, 220);
     }
 
     function setMarkdown(md){
@@ -187,28 +211,28 @@
 
     // Toolbar
     document.getElementById('plus').addEventListener('click', (e) => {
-      safeStop(e);
+      stop(e);
       if (focusNode) focusDepth = Math.min(8, focusDepth + 1);
       else fullDepth = Math.min(4, fullDepth + 1);
       render();
     }, true);
 
     document.getElementById('minus').addEventListener('click', (e) => {
-      safeStop(e);
+      stop(e);
       if (focusNode) focusDepth = Math.max(3, focusDepth - 1);
       else fullDepth = Math.max(1, fullDepth - 1);
       render();
     }, true);
 
     document.getElementById('resize').addEventListener('click', (e) => {
-      safeStop(e);
+      stop(e);
       focusNode = null;
       fullDepth = 2;
       render();
     }, true);
 
     document.getElementById('close').addEventListener('click', (e) => {
-      safeStop(e);
+      stop(e);
       window.parent.postMessage({ type:'VAT_CLOSE' }, '*');
     }, true);
 
@@ -219,7 +243,7 @@
       setMarkdown(ev.data.markdown || '');
     });
 
-    // Querystring fallback (md=...) so it works even if postMessage is blocked
+    // Querystring fallback (md=...) – no double decoding
     const mdFromQS = getQS('md');
     if (mdFromQS) setMarkdown(mdFromQS);
 
