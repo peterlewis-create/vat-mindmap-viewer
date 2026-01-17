@@ -7,56 +7,63 @@
 
   <style>
     html, body { height: 100%; margin: 0; }
-    body {
-      background: #0b0f16;
-      overflow: hidden;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    body{
+      background:#0b0f16;
+      overflow:hidden;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     }
 
-    #mm {
-      width: 100vw;
-      height: 100vh;
-      display: block;
-      background: #0b0f16;
+    #mm{
+      width:100vw;
+      height:100vh;
+      display:block;
+      background:#0b0f16;
     }
 
-    /* Keep Markmap’s branch colours, just soften them */
-    .markmap-link { opacity: 0.35; }
+    /* Soften links but keep branch colour identity */
+    .markmap-link{ opacity:0.35; }
 
-    /* Node pill (NotebookLM-ish). Actual tint is set per-node via JS */
-    .markmap-foreign {
-      display: inline-block;
-      padding: 11px 14px;
-      border-radius: 14px;
-      background: rgba(55, 65, 81, 0.85);
-      border: 1px solid rgba(255,255,255,0.10);
-      color: rgba(255,255,255,0.92);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.28);
-      backdrop-filter: blur(6px);
-      max-width: 620px;          /* helps “widen” readability */
-      line-height: 1.15;
-      white-space: normal;       /* allow wrapping */
+    /*
+      KEY CHANGE: Narrower node pills so 5–6 steps can sit on screen.
+      - smaller padding
+      - smaller font
+      - smaller max width
+      - wrapping enabled
+    */
+    .markmap-foreign{
+      display:inline-block;
+      padding:7px 10px;
+      border-radius:12px;
+      background:rgba(55,65,81,0.82);
+      border:1px solid rgba(255,255,255,0.10);
+      color:rgba(255,255,255,0.92);
+      box-shadow:0 10px 30px rgba(0,0,0,0.28);
+      backdrop-filter:blur(6px);
+      max-width:240px;        /* <<< narrower caption boxes */
+      line-height:1.12;
+      white-space:normal;     /* wrap */
+      word-break:break-word;  /* avoid long tokens forcing width */
+      font-size:12px;         /* <<< smaller text */
     }
 
-    .markmap-foreign a { color: rgba(255,255,255,0.92); text-decoration: none; }
-    .markmap-foreign a:hover { text-decoration: underline; }
+    .markmap-foreign a{ color:rgba(255,255,255,0.92); text-decoration:none; }
+    .markmap-foreign a:hover{ text-decoration:underline; }
 
-    /* Small hint (hidden in embed=1) */
-    #hint {
-      position: fixed;
-      left: 12px;
-      top: 12px;
-      z-index: 10;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(0,0,0,.30);
-      color: rgba(255,255,255,.82);
-      font-size: 12px;
-      font-weight: 650;
-      user-select: none;
+    #hint{
+      position:fixed;
+      left:12px;
+      top:12px;
+      z-index:10;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.30);
+      color:rgba(255,255,255,.82);
+      font-size:12px;
+      font-weight:650;
+      user-select:none;
     }
-    #hint.hidden { display: none; }
+    #hint.hidden{ display:none; }
   </style>
 
   <!-- Markmap (CDN) -->
@@ -66,7 +73,7 @@
 </head>
 
 <body>
-  <div id="hint">Click to expand/collapse • Shift+Click to focus/fit • Double-click background to Fit • Esc resets</div>
+  <div id="hint">Click: expand/collapse • Shift+Click: focus route (fit) • Esc: reset • Double-click background: fit</div>
   <svg id="mm"></svg>
 
   <script>
@@ -77,11 +84,13 @@
       const EMBED = params.get("embed") === "1";
       if (EMBED) document.getElementById("hint").classList.add("hidden");
 
-      // These two parameters solve “too narrow / too tiny”
-      // init = how many levels are expanded on load (small number keeps map readable)
-      // max  = hard cap for auto-collapsing deeper levels (keeps routes manageable)
-      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10)); // recommended: 2
-      const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max") || "6", 10)); // recommended: 6
+      // Show enough steps quickly, but keep the overview readable.
+      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "3", 10)); // show 3 levels on load
+      const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max")  || "6", 10)); // collapse beyond 6 initially
+
+      // Controlled zoom: this stops the “thin line” effect.
+      const MIN_SCALE = 0.72;  // don’t shrink smaller than this
+      const MAX_SCALE = 1.55;  // don’t zoom in beyond this
 
       const svg = document.getElementById("mm");
       const { Transformer } = window.markmap;
@@ -89,34 +98,24 @@
 
       const transformer = new Transformer();
 
-      // Branch palette (subtle, NotebookLM-ish). One colour per top-level branch.
-      const palette = [
-        "#60a5fa", "#34d399", "#fbbf24", "#a78bfa", "#fb7185",
-        "#22d3ee", "#f472b6", "#94a3b8"
-      ];
+      // NotebookLM-ish palette: consistent colour per top-level branch
+      const palette = ["#60a5fa","#34d399","#fbbf24","#a78bfa","#fb7185","#22d3ee","#f472b6","#94a3b8"];
       const branchColor = d3.scaleOrdinal(palette);
 
       let mm = null;
-      let currentRoot = null;
-      let currentMd = "";
+      let initialMd = "";
+      let initialRoot = null;   // collapsed copy
+      let liveRoot = null;      // the one we are rendering / toggling
 
       function parseColorToRGB(c) {
         if (!c) return null;
-
-        // rgb(a)
         const m = c.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-        if (m) return { r: +m[1], g: +m[2], b: +m[3] };
-
-        // hex
+        if (m) return { r:+m[1], g:+m[2], b:+m[3] };
         const hx = c.trim().match(/^#([0-9a-f]{6}|[0-9a-f]{3})$/i);
         if (hx) {
           let h = hx[1];
           if (h.length === 3) h = h.split("").map(ch => ch + ch).join("");
-          return {
-            r: parseInt(h.slice(0,2), 16),
-            g: parseInt(h.slice(2,4), 16),
-            b: parseInt(h.slice(4,6), 16),
-          };
+          return { r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16) };
         }
         return null;
       }
@@ -128,18 +127,17 @@
       }
 
       function tintNodePills() {
-        // After Markmap renders, it has coloured circles/links.
-        // We reuse the circle fill to tint each node pill like NotebookLM.
         svg.querySelectorAll("g.markmap-node").forEach(g => {
           const circle = g.querySelector("circle");
           const pill = g.querySelector(".markmap-foreign");
           if (!circle || !pill) return;
           const col = circle.getAttribute("fill") || circle.getAttribute("stroke") || "";
-          pill.style.backgroundColor = rgbaFrom(col, 0.20);
-          pill.style.borderColor = rgbaFrom(col, 0.35);
+          pill.style.backgroundColor = rgbaFrom(col, 0.18);
+          pill.style.borderColor = rgbaFrom(col, 0.34);
         });
       }
 
+      // Initial collapse only (so user can still expand deeper than 6 later)
       function collapseBeyond(node, depth, maxDepth) {
         if (!node) return;
         node.payload ||= {};
@@ -147,92 +145,106 @@
         if (node.children) node.children.forEach(ch => collapseBeyond(ch, depth + 1, maxDepth));
       }
 
+      function deepClone(obj) {
+        return JSON.parse(JSON.stringify(obj));
+      }
+
+      async function clampScale() {
+        if (!mm || !mm.state || !mm.state.transform) return;
+        const k = mm.state.transform.k || 1;
+        if (k < MIN_SCALE) {
+          try { await mm.rescale(MIN_SCALE); } catch (e) {}
+        } else if (k > MAX_SCALE) {
+          try { await mm.rescale(MAX_SCALE); } catch (e) {}
+        }
+      }
+
+      async function fitClamped(fitRatio) {
+        if (!mm) return;
+        try { await mm.fit(fitRatio); } catch (e) {}
+        await clampScale();
+        tintNodePills();
+        bindNodeHandlers();
+      }
+
       function resetToInitial() {
-        if (!currentMd) return;
-        renderMarkdown(currentMd); // re-transform + re-render, restoring init collapse state
+        if (!initialRoot || !mm) return;
+        liveRoot = deepClone(initialRoot);
+        mm.setData(liveRoot);
+        setTimeout(() => fitClamped(1.25), 30);
       }
 
       function focusRoute(inode) {
-        if (!inode || !inode.parent || !currentRoot || !currentRoot.children) return;
+        if (!inode || !inode.parent || !liveRoot || !liveRoot.children) return;
 
-        // Build a set of "pure nodes" that are on the path from root -> clicked node
+        // Build "pure node" path set (root -> clicked)
         const path = new Set();
         let p = inode;
         while (p) { path.add(p.data); p = p.parent; }
 
-        // Collapse top-level siblings not on the path (this stops the viewport shrinking)
-        currentRoot.children.forEach(ch => {
+        // Collapse top-level siblings not on the chosen route
+        liveRoot.children.forEach(ch => {
           ch.payload ||= {};
           ch.payload.fold = path.has(ch) ? 0 : 1;
         });
 
-        // Keep everything beyond MAX_LEVEL collapsed, but force-open the path itself
-        collapseBeyond(currentRoot, 0, MAX_LEVEL);
-        (function openPath(n) {
-          if (!n) return;
-          n.payload ||= {};
-          if (path.has(n)) n.payload.fold = 0;
-          if (n.children) n.children.forEach(openPath);
-        })(currentRoot);
+        // Open everything on the path (but do NOT re-collapse beyond MAX_LEVEL here,
+        // so user can still expand deeper later if they want)
+        (function openPath(node) {
+          if (!node) return;
+          node.payload ||= {};
+          if (path.has(node)) node.payload.fold = 0;
+          if (node.children) node.children.forEach(openPath);
+        })(liveRoot);
 
-        mm.setData(currentRoot);
-        // Fit/center after layout updates
+        mm.setData(liveRoot);
+
+        // Fit the focused route (this is your “screen expands/contracts in unison”)
         setTimeout(async () => {
-          try { await mm.fit(1.35); } catch (e) {}
-          try { await mm.ensureVisible(inode, { left: 80, right: 80, top: 80, bottom: 80 }); } catch (e) {}
-          tintNodePills();
-          bindNodeHandlers(); // rebind for newly rendered DOM
-        }, 40);
-      }
-
-      function getScale() {
-        const k = mm && mm.state && mm.state.transform && typeof mm.state.transform.k === "number"
-          ? mm.state.transform.k
-          : 1;
-        return k;
+          await fitClamped(1.32);
+          try { await mm.ensureVisible(inode, { left: 70, right: 70, top: 70, bottom: 70 }); } catch (e) {}
+        }, 30);
       }
 
       function bindNodeHandlers() {
-        // Add behaviour *on top of* Markmap’s default click-to-toggle
         svg.querySelectorAll("g.markmap-node").forEach(g => {
           if (g.dataset.vatBound === "1") return;
           g.dataset.vatBound = "1";
           g.style.cursor = "pointer";
 
           g.addEventListener("click", (e) => {
-            const inode = g.__data__; // Markmap uses D3; node data is here
+            const inode = g.__data__; // D3 bound data
             if (!inode) return;
 
-            // User-requested "expand/contract to fit": do it on request (Shift-click)
+            // SHIFT+CLICK = focus route + fit to keep 5–6 steps visible
             if (e.shiftKey) {
-              // Let Markmap toggle happen, then focus/fit
               setTimeout(() => focusRoute(inode), 0);
               return;
             }
 
-            // Optional: Alt/Option-click just fits current view
-            if (e.altKey) {
-              setTimeout(async () => {
-                try { await mm.fit(1.35); } catch (err) {}
-                tintNodePills();
-              }, 0);
-            } else {
-              // Normal click: just re-tint after toggles
-              setTimeout(tintNodePills, 0);
-            }
+            // Normal click: after toggle, do a gentle clamped fit
+            // (keeps the view in sync without shrinking into a thin line)
+            setTimeout(() => fitClamped(1.25), 0);
           });
         });
       }
 
       async function renderMarkdown(md) {
-        currentMd = String(md || "").trim();
-        if (!currentMd) return;
+        const clean = String(md || "").trim();
+        if (!clean) return;
 
-        const { root } = transformer.transform(currentMd);
-        currentRoot = root;
+        initialMd = clean;
 
-        // Auto-collapse deeper than MAX_LEVEL (prevents runaway width)
-        collapseBeyond(currentRoot, 0, MAX_LEVEL);
+        const { root } = transformer.transform(clean);
+
+        // Collapse beyond level 6 initially (and expand INIT_LEVEL)
+        collapseBeyond(root, 0, MAX_LEVEL);
+
+        // Save an initial collapsed copy for reset
+        initialRoot = deepClone(root);
+
+        // Work from a live copy so user toggles don’t mutate the reset baseline
+        liveRoot = deepClone(root);
 
         const opts = {
           autoFit: false,
@@ -240,68 +252,52 @@
           zoom: true,
           scrollForPan: true,
 
-          // Layout “widening” / readability
-          spacingHorizontal: 170,
-          spacingVertical: 22,
+          // Layout tuned for “6 steps readable”
+          spacingHorizontal: 150,   // distance between levels
+          spacingVertical: 24,
           paddingX: 18,
-          nodeMinHeight: 22,
-          maxWidth: 460,
-          fitRatio: 0.92,
-          maxInitialScale: 1.25,
-          duration: 220,
+          nodeMinHeight: 20,
 
-          // Start collapsed to INIT_LEVEL (fixes your “too narrow / tiny” screenshot)
+          // Keep label widths under control (also reinforced by CSS max-width)
+          maxWidth: 240,
+
+          // Important: show more than 2 levels to avoid “too collapsed”
           initialExpandLevel: INIT_LEVEL,
 
-          // Consistent colour per top-level branch (NotebookLM-like)
+          duration: 220,
+
+          // Colour per top-level branch
           color: (node) => {
             if (!node || !node.parent) return "rgba(148,163,184,0.55)";
-            // climb to first-level child under root:
             let p = node;
             while (p.parent && p.parent.parent) p = p.parent;
             const key = (p && p.data && p.data.content) ? p.data.content : "branch";
             return branchColor(key);
           },
-          lineWidth: () => 1.2,
+          lineWidth: () => 1.15,
         };
 
         if (!mm) {
-          mm = Markmap.create(svg, opts, currentRoot);
+          mm = Markmap.create(svg, opts, liveRoot);
 
-          // Double-click background = Fit
-          svg.addEventListener("dblclick", async (e) => {
-            // if user dblclicks a node, ignore (avoid “jump”)
+          // Double-click background = fit clamped
+          svg.addEventListener("dblclick", (e) => {
             if (e.target && e.target.closest && e.target.closest("g.markmap-node")) return;
-            try { await mm.fit(1.35); } catch (err) {}
-            tintNodePills();
+            setTimeout(() => fitClamped(1.32), 0);
           });
 
-          // Keyboard shortcuts
-          document.addEventListener("keydown", async (e) => {
-            if (!mm) return;
+          // ESC = reset; F = fit
+          document.addEventListener("keydown", (e) => {
             if (e.key === "Escape") resetToInitial();
-            if (e.key === "f" || e.key === "F") {
-              try { await mm.fit(1.35); } catch (err) {}
-              tintNodePills();
-            }
-            if (e.key === "+" || e.key === "=") {
-              try { await mm.rescale(getScale() * 1.15); } catch (err) {}
-            }
-            if (e.key === "-" || e.key === "_") {
-              try { await mm.rescale(getScale() / 1.15); } catch (err) {}
-            }
+            if (e.key === "f" || e.key === "F") setTimeout(() => fitClamped(1.32), 0);
           });
+
         } else {
           mm.setOptions(opts);
-          mm.setData(currentRoot);
+          mm.setData(liveRoot);
         }
 
-        // Initial fit is now safe because INIT_LEVEL prevents huge width
-        setTimeout(async () => {
-          try { await mm.fit(1.35); } catch (e) {}
-          tintNodePills();
-          bindNodeHandlers();
-        }, 40);
+        setTimeout(() => fitClamped(1.32), 40);
       }
 
       function extractMarkdown(data) {
@@ -315,7 +311,7 @@
         return "";
       }
 
-      // Listen for parent messages (Squarespace)
+      // Listen for Squarespace postMessage
       window.addEventListener("message", (event) => {
         const d = event.data;
         const type = (d && typeof d === "object" && d.type) ? d.type : "";
@@ -323,15 +319,10 @@
           const md = extractMarkdown(d);
           if (md) renderMarkdown(md);
         }
-        if (type === "FIT" && mm) {
-          setTimeout(async () => {
-            try { await mm.fit(1.35); } catch (e) {}
-            tintNodePills();
-          }, 0);
-        }
+        if (type === "FIT" && mm) setTimeout(() => fitClamped(1.32), 0);
       });
 
-      // Handshake for “Waiting for markdown…”
+      // Handshake so Squarespace knows when to post
       function notifyReady() {
         try { window.parent && window.parent.postMessage({ type: "VAT_MINDMAP_READY" }, "*"); } catch (e) {}
       }
