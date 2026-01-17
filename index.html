@@ -15,48 +15,100 @@
     #mm{ width:100vw; height:100vh; display:block; background:#0b0f16; }
     .markmap-link{ opacity:0.40; }
 
-    /* IMPORTANT: prevent clipping of wrapped text */
+    /* Prevent wrapped text clipping */
     foreignObject{ overflow: visible !important; }
 
-    /* Readable + wrapped + top aligned */
+    /* ===== Header (NotebookLM-like) ===== */
+    #hdr{
+      position:fixed;
+      left:18px;
+      top:16px;
+      z-index:30;
+      pointer-events:none; /* never blocks panning */
+    }
+    #hdrTitle{
+      font-size:22px;
+      font-weight:850;
+      color:rgba(255,255,255,0.96);
+      letter-spacing:-0.2px;
+      text-shadow:0 2px 10px rgba(0,0,0,0.35);
+      margin:0 0 6px 0;
+    }
+    #hdrSub{
+      font-size:13px;
+      font-weight:650;
+      color:rgba(255,255,255,0.62);
+      margin:0;
+    }
+
+    /* ===== Node pills ===== */
     .markmap-foreign{
       display:block !important;
       box-sizing:border-box !important;
 
-      padding:12px 14px;
-      border-radius:16px;
-      background:rgba(55,65,81,0.88);
-      border:1px solid rgba(255,255,255,0.14);
-      color:rgba(255,255,255,0.98) !important;
+      padding:10px 12px;
+      border-radius:14px;
 
-      font-size:18px;          /* bigger */
-      font-weight:800;         /* bolder */
+      background:rgba(55,65,81,0.82);
+      border:1px solid rgba(255,255,255,0.12);
+      color:rgba(255,255,255,0.96) !important;
+
+      font-size:16px;
+      font-weight:750;
       line-height:1.18;
       text-align:left;
-      text-rendering:optimizeLegibility;
 
-      /* Wrap behaviour */
-      width:300px;             /* fixed width ensures predictable wrapping */
-      max-width:300px;
-      white-space:normal !important;
-      word-break:break-word;
-      overflow-wrap:anywhere;
-      hyphens:auto;
-
-      /* Extra contrast */
-      text-shadow:0 1px 1px rgba(0,0,0,0.55);
-      box-shadow:0 12px 34px rgba(0,0,0,0.30);
+      box-shadow:0 12px 34px rgba(0,0,0,0.28);
       backdrop-filter:blur(7px);
+
+      /* Default (depth>=2): wrap + cap width */
+      width:320px;
+      max-width:320px;
+      white-space:normal !important;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+      hyphens:auto;
+    }
+    .markmap-foreign *{ color:rgba(255,255,255,0.96) !important; }
+
+    /* Level 0 & 1: match NotebookLM — wide pills, NO wrapping, readable */
+    .mm-depth-0, .mm-depth-1{
+      width:auto !important;
+      max-width:none !important;
+      white-space:nowrap !important;
+
+      font-size:17px !important;
+      font-weight:800 !important;
+      padding:12px 14px !important;
+      border-radius:14px !important;
     }
 
-    /* Some Markmap builds render text inside children – force color */
-    .markmap-foreign *{ color:rgba(255,255,255,0.98) !important; }
+    /* Small “chevron” indicator like NotebookLM for nodes with children */
+    .mm-expander{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      margin-left:10px;
+      width:20px;
+      height:20px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.16);
+      background:rgba(0,0,0,0.18);
+      color:rgba(255,255,255,0.78);
+      font-weight:900;
+      font-size:12px;
+      flex:0 0 auto;
+    }
 
+    /* Optional: hide the default Markmap circle nodes for a cleaner NotebookLM look */
+    g.markmap-node circle{ opacity:0.0; }
+
+    /* ===== Controls ===== */
     #uiBar{
       position:fixed;
       right:14px;
       top:14px;
-      z-index:20;
+      z-index:40;
       display:flex;
       gap:8px;
       align-items:center;
@@ -79,22 +131,6 @@
     }
     #uiBar button:hover{ background:rgba(255,255,255,.10); }
     #uiBar .sep{ width:1px; height:22px; background:rgba(255,255,255,.14); margin:0 2px; }
-
-    #hint{
-      position:fixed;
-      left:12px;
-      top:12px;
-      z-index:10;
-      padding:10px 12px;
-      border-radius:12px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(0,0,0,.30);
-      color:rgba(255,255,255,.82);
-      font-size:12px;
-      font-weight:650;
-      user-select:none;
-    }
-    #hint.hidden{ display:none; }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -103,7 +139,10 @@
 </head>
 
 <body>
-  <div id="hint">Click: expand/collapse • Drag: pan • Wheel/trackpad: zoom • Use Overview/Readable buttons</div>
+  <div id="hdr">
+    <div id="hdrTitle"></div>
+    <div id="hdrSub"></div>
+  </div>
 
   <div id="uiBar">
     <button id="zoomIn" type="button">+</button>
@@ -120,16 +159,14 @@
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
-      const EMBED = params.get("embed") === "1";
-      if (EMBED) document.getElementById("hint").classList.add("hidden");
 
       const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10));
       const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max")  || "6", 10));
 
-      // Two explicit modes
-      const READABLE_SCALE = 1.55;  // snap here for reading
-      const OVERVIEW_SCALE = 0.85;  // snap here to see more of the map
-      const MIN_SCALE = 0.65;
+      // Readability/overview scales (buttons control these)
+      const READABLE_SCALE = 1.35;
+      const OVERVIEW_SCALE = 0.85;
+      const MIN_SCALE = 0.60;
       const MAX_SCALE = 3.00;
 
       const svg = document.getElementById("mm");
@@ -137,14 +174,21 @@
       const { Markmap } = window.markmap;
       const transformer = new Transformer();
 
-      const palette = ["#60a5fa","#34d399","#fbbf24","#a78bfa","#fb7185","#22d3ee","#f472b6","#94a3b8"];
-      const branchColor = d3.scaleOrdinal(palette);
+      const hdrTitleEl = document.getElementById("hdrTitle");
+      const hdrSubEl   = document.getElementById("hdrSub");
 
       let mm = null;
       let initialRoot = null;
       let liveRoot = null;
 
       function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
+
+      function setHeaderFrom(titleText){
+        const title = String(titleText || "").trim();
+        hdrTitleEl.textContent = title || "UK VAT Taxonomy";
+        const sources = params.get("sources"); // optional
+        hdrSubEl.textContent = sources ? ("Based on " + sources + " sources") : "";
+      }
 
       function currentScale(){
         return (mm && mm.state && mm.state.transform && typeof mm.state.transform.k === "number")
@@ -158,6 +202,12 @@
         try { await mm.rescale(kk); } catch(e) {}
       }
 
+      async function setReadable(){ await rescaleClamped(Math.max(currentScale(), READABLE_SCALE)); }
+      async function setOverview(){
+        try { await mm.fit(1.02); } catch(e) {}
+        await rescaleClamped(OVERVIEW_SCALE);
+      }
+
       function collapseBeyond(node, depth, maxDepth){
         if (!node) return;
         node.payload ||= {};
@@ -165,7 +215,6 @@
         if (node.children) node.children.forEach(ch => collapseBeyond(ch, depth+1, maxDepth));
       }
 
-      // Pan to the right-most open descendant so lower levels don't run off-screen
       function rightMostOpen(inode){
         let cur = inode;
         while (cur && cur.children && cur.children.length) {
@@ -179,20 +228,10 @@
 
       async function keepEndVisible(inode){
         if (!mm || !inode) return;
+        await setReadable();
         const end = rightMostOpen(inode);
-        try { await mm.ensureVisible(end, { left:90, right:180, top:90, bottom:90 }); } catch(e) {}
-      }
-
-      async function setReadable(){
-        if (!mm) return;
-        await rescaleClamped(Math.max(currentScale(), READABLE_SCALE));
-      }
-
-      async function setOverview(){
-        if (!mm) return;
-        // Fit to center then zoom out to overview
-        try { await mm.fit(1.02); } catch(e) {}
-        await rescaleClamped(OVERVIEW_SCALE);
+        try { await mm.ensureVisible(end, { left:90, right:200, top:90, bottom:90 }); } catch(e) {}
+        decorateNodes();
       }
 
       function reset(){
@@ -203,59 +242,47 @@
           await setReadable();
           try { await mm.fit(1.02); } catch(e) {}
           await setReadable();
-          bindNodeHandlers();
+          decorateNodes();
         }, 30);
       }
 
-      function focusRoute(inode){
-        if (!inode || !inode.parent || !liveRoot || !liveRoot.children) return;
-
-        const path = new Set();
-        let p = inode;
-        while (p) { path.add(p.data); p = p.parent; }
-
-        // collapse other top-level branches
-        liveRoot.children.forEach(ch=>{
-          ch.payload ||= {};
-          ch.payload.fold = path.has(ch) ? 0 : 1;
-        });
-
-        // open path
-        (function openPath(node){
-          if (!node) return;
-          node.payload ||= {};
-          if (path.has(node)) node.payload.fold = 0;
-          if (node.children) node.children.forEach(openPath);
-        })(liveRoot);
-
-        mm.setData(liveRoot);
-
-        setTimeout(async ()=>{
-          await setReadable();
-          await keepEndVisible(inode);
-        }, 30);
-      }
-
-      function bindNodeHandlers(){
+      // Decorate pills by depth + add NotebookLM-style chevron
+      function decorateNodes(){
         svg.querySelectorAll("g.markmap-node").forEach(g=>{
+          const inode = g.__data__;
+          if (!inode || !inode.data) return;
+
+          const depth = typeof inode.depth === "number" ? inode.depth : 0;
+          const pill = g.querySelector(".markmap-foreign");
+          if (!pill) return;
+
+          // Depth class for styling
+          pill.classList.remove("mm-depth-0","mm-depth-1","mm-depth-2","mm-depth-3","mm-depth-4","mm-depth-5","mm-depth-6");
+          pill.classList.add("mm-depth-" + Math.min(depth, 6));
+
+          // Add/remove chevron
+          let exp = pill.querySelector(".mm-expander");
+          const hasChildren = inode.children && inode.children.length;
+          if (hasChildren) {
+            if (!exp) {
+              exp = document.createElement("span");
+              exp.className = "mm-expander";
+              pill.appendChild(exp);
+            }
+            const folded = inode.data.payload && inode.data.payload.fold === 1;
+            exp.textContent = folded ? "›" : "‹";
+          } else {
+            if (exp) exp.remove();
+          }
+
+          // Bind click once
           if (g.dataset.vatBound === "1") return;
           g.dataset.vatBound = "1";
           g.style.cursor = "pointer";
-
           g.addEventListener("click", (e)=>{
-            const inode = g.__data__;
-            if (!inode) return;
-
-            if (e.shiftKey) {
-              setTimeout(()=>focusRoute(inode), 0);
-              return;
-            }
-
-            // Normal click: keep readable, then pan to show newly expanded end
-            setTimeout(async ()=>{
-              await setReadable();
-              await keepEndVisible(inode);
-            }, 0);
+            const n = g.__data__;
+            if (!n) return;
+            setTimeout(()=>keepEndVisible(n), 0);
           });
         });
       }
@@ -265,6 +292,10 @@
         if (!clean) return;
 
         const { root } = transformer.transform(clean);
+
+        // Title for header = markdown H1
+        setHeaderFrom(root && root.content ? root.content : "");
+
         collapseBeyond(root, 0, MAX_LEVEL);
 
         initialRoot = deepClone(root);
@@ -277,36 +308,32 @@
           scrollForPan:true,
           duration:220,
 
-          spacingHorizontal: 155,
-          spacingVertical: 115,  // more vertical space for 3–4 children
+          // More breathing room like NotebookLM
+          spacingHorizontal: 160,
+          spacingVertical: 120,
+
           paddingX: 18,
           nodeMinHeight: 26,
-          maxWidth: 300,         // matches fixed pill width
+
+          // This maxWidth applies to foreignObject size calculation.
+          // Our CSS overrides depth 0/1 to be auto-width.
+          maxWidth: 360,
 
           initialExpandLevel: INIT_LEVEL,
 
-          color: (node) => {
-            if (!node || !node.parent) return "rgba(148,163,184,0.55)";
-            let p = node;
-            while (p.parent && p.parent.parent) p = p.parent;
-            const key = (p && p.data && p.data.content) ? p.data.content : "branch";
-            return branchColor(key);
-          },
-          lineWidth: () => 1.25,
+          color: () => "rgba(148,163,184,0.60)",
+          lineWidth: () => 1.2,
         };
 
         if (!mm) {
           mm = Markmap.create(svg, opts, liveRoot);
 
-          // Controls (correct directions)
           document.getElementById("zoomIn").addEventListener("click", () => rescaleClamped(currentScale() * 1.15));
           document.getElementById("zoomOut").addEventListener("click", () => rescaleClamped(currentScale() / 1.15));
-
           document.getElementById("overview").addEventListener("click", setOverview);
           document.getElementById("readable").addEventListener("click", setReadable);
           document.getElementById("reset").addEventListener("click", reset);
 
-          // Keyboard helpers
           document.addEventListener("keydown", (e)=>{
             if (e.key === "Escape") reset();
             if (e.key === "+" || e.key === "=") rescaleClamped(currentScale() * 1.15);
@@ -318,12 +345,12 @@
           mm.setData(liveRoot);
         }
 
-        // Start readable + centered
+        // Start readable + centered, then decorate for depth + chevrons
         setTimeout(async ()=>{
           await setReadable();
           try { await mm.fit(1.02); } catch(e) {}
           await setReadable();
-          bindNodeHandlers();
+          decorateNodes();
         }, 40);
       }
 
@@ -347,6 +374,7 @@
         }
       });
 
+      // Handshake
       function notifyReady(){
         try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_READY" }, "*"); } catch(e) {}
       }
