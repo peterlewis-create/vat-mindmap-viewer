@@ -12,18 +12,20 @@
       overflow:hidden;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     }
+
     #mm{
       width:100vw;
       height:100vh;
       display:block;
       background:#0b0f16;
     }
+
     .markmap-link{ opacity:0.38; }
 
-    /* READABLE pills (bigger than your current tiny ones) */
+    /* READABLE + COMPACT nodes (big enough to read, but not huge width) */
     .markmap-foreign{
       display:inline-block;
-      padding:10px 12px;
+      padding:9px 11px;
       border-radius:14px;
       background:rgba(55,65,81,0.82);
       border:1px solid rgba(255,255,255,0.10);
@@ -31,12 +33,14 @@
       box-shadow:0 10px 30px rgba(0,0,0,0.28);
       backdrop-filter:blur(6px);
 
-      /* Keep captions compact but readable */
-      max-width:320px;
       font-size:14px;
       line-height:1.18;
+
+      /* Key: keep each caption narrow enough that level-6 can fit */
+      max-width:260px;
       white-space:normal;
       word-break:break-word;
+      hyphens:auto;
     }
 
     #hint{
@@ -62,7 +66,7 @@
 </head>
 
 <body>
-  <div id="hint">Click: toggle • Shift+Click: focus route (fit) • Double-click background: Fit • Esc: reset</div>
+  <div id="hint">Click: toggle + keep route visible • Shift+Click: focus route • Double-click background: Fit • Esc: reset</div>
   <svg id="mm"></svg>
 
   <script>
@@ -71,12 +75,12 @@
       const EMBED = params.get("embed") === "1";
       if (EMBED) document.getElementById("hint").classList.add("hidden");
 
-      // Load-state: show enough to feel like “5–6 steps”, but not explode the whole tree.
       const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "3", 10));
       const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max")  || "6", 10));
 
-      // Don’t allow “fit” to shrink to unreadable
-      const MIN_SCALE = 1.00;
+      // Readability clamp: prevents “tiny unreadable nodes”.
+      // If a route is too long to fit above MIN_SCALE, we keep text readable and pan instead.
+      const MIN_SCALE = 0.95;
       const MAX_SCALE = 2.20;
 
       const svg = document.getElementById("mm");
@@ -121,7 +125,6 @@
         });
       }
 
-      // Initial collapse only (user can expand deeper later)
       function collapseBeyond(node, depth, maxDepth){
         if (!node) return;
         node.payload ||= {};
@@ -148,18 +151,43 @@
         if (!initialRoot || !mm) return;
         liveRoot = deepClone(initialRoot);
         mm.setData(liveRoot);
-        setTimeout(() => fitClamped(1.18), 30);
+        setTimeout(()=>fitClamped(1.10), 30);
+      }
+
+      // Find a “right-most” open descendant (so level-6 doesn’t end off-screen)
+      function rightMostOpen(inode){
+        let cur = inode;
+        // Walk down to last unfolded child repeatedly
+        while (cur && cur.children && cur.children.length) {
+          const kids = cur.children;
+          const last = kids[kids.length - 1];
+          // If Markmap indicates folded, stop
+          if (last && last.data && last.data.payload && last.data.payload.fold === 1) break;
+          cur = last;
+        }
+        return cur || inode;
+      }
+
+      async function keepRouteVisible(inode){
+        if (!mm || !inode) return;
+
+        // Gentle fit that won’t destroy readability
+        await fitClamped(1.12);
+
+        // After fitting, pan to ensure the far-right open node is visible
+        const end = rightMostOpen(inode);
+        try { await mm.ensureVisible(end, { left:80, right:120, top:80, bottom:80 }); } catch(e) {}
+        tintNodePills();
       }
 
       function focusRoute(inode){
         if (!inode || !inode.parent || !liveRoot || !liveRoot.children) return;
 
-        // path set root->clicked (pure nodes)
         const path = new Set();
         let p = inode;
         while (p) { path.add(p.data); p = p.parent; }
 
-        // Collapse top-level branches not on the path (this gives the “route view”)
+        // Collapse other top-level branches
         liveRoot.children.forEach(ch=>{
           ch.payload ||= {};
           ch.payload.fold = path.has(ch) ? 0 : 1;
@@ -175,10 +203,8 @@
 
         mm.setData(liveRoot);
 
-        // Now fit (on request) — this is the “expand/contract in unison” behaviour
         setTimeout(async ()=>{
-          await fitClamped(1.25);
-          try { await mm.ensureVisible(inode, { left:80, right:80, top:80, bottom:80 }); } catch(e) {}
+          await keepRouteVisible(inode);
         }, 30);
       }
 
@@ -192,15 +218,14 @@
             const inode = g.__data__;
             if (!inode) return;
 
-            // Shift+Click = focus + fit
+            // Shift+Click = focus route (collapse others + fit/pan)
             if (e.shiftKey) {
               setTimeout(()=>focusRoute(inode), 0);
               return;
             }
 
-            // Normal click: DO NOT fit (keeps text readable)
-            // Just re-tint after Markmap toggles
-            setTimeout(tintNodePills, 0);
+            // Normal click: toggle happens inside Markmap; then we fit/pan JUST ENOUGH
+            setTimeout(()=>keepRouteVisible(inode), 0);
           });
         });
       }
@@ -211,6 +236,7 @@
 
         const { root } = transformer.transform(clean);
 
+        // Default: collapse beyond 6th level initially (user can expand later)
         collapseBeyond(root, 0, MAX_LEVEL);
 
         initialRoot = deepClone(root);
@@ -223,15 +249,17 @@
           scrollForPan:true,
           duration:220,
 
-          // IMPORTANT: vertical spread. You only get this if you have siblings.
-          spacingVertical: 70,
-          spacingHorizontal: 170,
+          // tighter horizontal spacing reduces “route length”
+          spacingHorizontal: 135,
+
+          // larger vertical spacing helps branches go up/down when siblings exist
+          spacingVertical: 90,
 
           paddingX: 18,
           nodeMinHeight: 22,
 
-          // Keep labels compact
-          maxWidth: 320,
+          // keep captions compact; CSS enforces too
+          maxWidth: 260,
 
           initialExpandLevel: INIT_LEVEL,
 
@@ -248,23 +276,21 @@
         if (!mm) {
           mm = Markmap.create(svg, opts, liveRoot);
 
-          // Background controls
           svg.addEventListener("dblclick", (e)=>{
             if (e.target && e.target.closest && e.target.closest("g.markmap-node")) return;
-            setTimeout(()=>fitClamped(1.25), 0);
+            setTimeout(()=>fitClamped(1.12), 0);
           });
 
           document.addEventListener("keydown", (e)=>{
             if (e.key === "Escape") reset();
-            if (e.key === "f" || e.key === "F") setTimeout(()=>fitClamped(1.25), 0);
+            if (e.key === "f" || e.key === "F") setTimeout(()=>fitClamped(1.12), 0);
           });
         } else {
           mm.setOptions(opts);
           mm.setData(liveRoot);
         }
 
-        // One initial fit (clamped) so it starts nicely but readable
-        setTimeout(()=>fitClamped(1.18), 40);
+        setTimeout(()=>fitClamped(1.10), 40);
       }
 
       function extractMarkdown(data){
@@ -285,7 +311,7 @@
           const md = extractMarkdown(d);
           if (md) renderMarkdown(md);
         }
-        if (type === "FIT" && mm) setTimeout(()=>fitClamped(1.25), 0);
+        if (type === "FIT" && mm) setTimeout(()=>fitClamped(1.12), 0);
       });
 
       function notifyReady(){
