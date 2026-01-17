@@ -2,164 +2,155 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
-
   <style>
-    html, body { height: 100%; margin: 0; }
-    body {
-      background: #070b14;
-      overflow: hidden;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    :root {
+      --bg: #0b0f14;
+      --box-bg: #1e293b;
+      --text: #ffffff;
+      --accent: #3b82f6;
     }
-    #wrap { position: fixed; inset: 0; }
-    svg { width: 100%; height: 100%; display: block; }
-    rect.markmap-bg { fill: #070b14; }
-
-    :root { --vat-font-scale: 1; }
-    .markmap-foreign { color: #eaf2ff; }
-    .markmap-foreign > div {
-      font-size: calc(16px * var(--vat-font-scale));
-      line-height: 1.25;
-      background: rgba(8, 14, 28, 0.78);
-      border: 1px solid rgba(120, 170, 255, 0.85);
-      border-radius: 10px;
-      padding: 6px 10px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-      backdrop-filter: blur(3px);
+    html, body {
+      height: 100% !important;
+      margin: 0 !important;
+      background-color: var(--bg) !important;
+      overflow: hidden !important;
+      font-family: sans-serif !important;
+    }
+    #svg {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      background-color: var(--bg) !important;
     }
 
-    #status {
+    /* TOOLBAR: visible + clickable */
+    #toolbar {
       position: fixed;
-      left: 14px;
-      bottom: 14px;
-      z-index: 10;
-      background: rgba(0,0,0,0.55);
-      border: 1px solid rgba(255,255,255,0.18);
-      color: rgba(255,255,255,0.92);
-      padding: 8px 10px;
-      border-radius: 10px;
-      font-size: 12px;
+      top: 30px;
+      right: 30px;
+      z-index: 10000;
+      display: flex;
+      gap: 12px;
+    }
+    .tb-btn {
+      background: #334155 !important;
+      border: 2px solid #fff !important;
+      color: #fff !important;
+      min-width: 50px;
+      height: 50px;
+      border-radius: 12px;
+      cursor: pointer !important;
+      font-weight: 800;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.8);
       user-select: none;
     }
-    #status b { font-weight: 700; }
-  </style>
 
-  <!-- Markmap CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.12"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12"></script>
+    /* READABILITY: solid high-contrast boxes */
+    .markmap-foreign {
+      background-color: #1e293b !important;
+      border: 3px solid #3b82f6 !important;
+      border-radius: 10px !important;
+      padding: 12px 20px !important;
+      color: #ffffff !important;
+      font-weight: 800 !important;
+      font-size: 18px !important;
+      box-shadow: 0 12px 24px rgba(0,0,0,0.9) !important;
+      display: flex !important;
+      align-items: center !important;
+      white-space: nowrap !important;
+    }
+    .markmap-foreign div { color: #ffffff !important; background: transparent !important; }
+    .markmap-link { stroke: #475569 !important; stroke-width: 3px !important; }
+  </style>
 </head>
 
 <body>
-  <div id="wrap">
-    <svg id="mm"></svg>
+  <div id="toolbar">
+    <button class="tb-btn" id="zin" title="Expand one more level">+</button>
+    <button class="tb-btn" id="zout" title="Collapse one level">−</button>
+    <button class="tb-btn" style="width:auto; padding:0 15px;" id="res" title="Fit to screen">Resize</button>
+    <button class="tb-btn" style="width:auto; padding:0 15px;" id="cls" title="Close">Close</button>
   </div>
-  <div id="status"><b>Viewer:</b> booting…</div>
+
+  <svg id="svg" class="markmap"></svg>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12"></script>
 
   <script>
     (function () {
-      const CHANNEL = "vat-mindmap";
-      const statusEl = document.getElementById("status");
-      const svg = document.getElementById("mm");
+      const { Transformer, Markmap } = window.markmap;
+      const svg = document.querySelector('#svg');
 
-      const { Transformer } = window.markmap;
-      const { Markmap, loadCSS, loadJS } = window.markmap;
-
-      const transformer = new Transformer();
+      const trans = new Transformer();
       let mm = null;
+      let lastRoot = null;
+      let expandLevel = 2; // default: show top ~2 levels
 
-      let currentMd = "";
-      let currentExpandLevel = 2;
-
-      function setStatus(text) { statusEl.innerHTML = text; }
-
-      function toArray(x) {
-        if (!x) return [];
-        return Array.isArray(x) ? x : [x];
+      function renderRoot() {
+        if (!lastRoot) return;
+        // Re-create to apply initialExpandLevel deterministically
+        svg.innerHTML = '';
+        mm = Markmap.create(svg, {
+          autoFit: true,
+          initialExpandLevel: expandLevel,
+          spacingVertical: 80,
+          spacingHorizontal: 180
+        }, lastRoot);
+        mm.fit();
       }
 
-      // Some builds can return strings/objects: normalise to an array of URL strings
-      function toUrlArray(items) {
-        const arr = toArray(items).filter(Boolean);
-        const out = [];
-        for (const v of arr) {
-          if (typeof v === "string") out.push(v);
-          else if (v && typeof v === "object") {
-            if (typeof v.href === "string") out.push(v.href);
-            else if (typeof v.src === "string") out.push(v.src);
-          }
+      window.addEventListener('message', (ev) => {
+        const d = ev.data || {};
+        if (d.type !== 'VAT_SET') return;
+
+        const md = String(d.markdown || '').trim();
+        const { root } = trans.transform(md);
+        lastRoot = root;
+
+        if (Number.isFinite(d.expandLevel)) {
+          expandLevel = Math.max(1, Math.min(12, d.expandLevel));
         }
-        return out;
-      }
-
-      async function render(md, expandLevel) {
-        currentMd = String(md || "");
-        currentExpandLevel = Number.isFinite(expandLevel) ? expandLevel : currentExpandLevel;
-
-        const safeMd = currentMd.trim();
-        if (!safeMd) {
-          setStatus("<b>Viewer:</b> waiting for markdown…");
-          return;
-        }
-
-        setStatus("<b>Viewer:</b> rendering…");
-
-        const { root, features } = transformer.transform(safeMd);
-        const assets = transformer.getAssets(features);
-
-        const styles = toUrlArray(assets && assets.styles);
-        const scripts = toUrlArray(assets && assets.scripts);
-
-        if (styles.length) loadCSS(styles);
-        if (scripts.length) await loadJS(scripts, { getMarkmap: () => window.markmap });
-
-        if (!mm) {
-          mm = Markmap.create(svg, {
-            initialExpandLevel: currentExpandLevel,
-            zoom: true,
-            pan: true,
-            duration: 200
-          }, root);
-        } else {
-          await mm.setData(root, { initialExpandLevel: currentExpandLevel });
-        }
-
-        await mm.fit();
-        setStatus("<b>Viewer:</b> ready");
-      }
-
-      window.addEventListener("message", async (evt) => {
-        const msg = evt && evt.data;
-        if (!msg || typeof msg !== "object") return;
-        if (msg.channel !== CHANNEL) return;
-
-        try {
-          if (msg.type === "setMarkdown") {
-            await render(msg.markdown || "", Number(msg.expandLevel ?? currentExpandLevel));
-            evt.source && evt.source.postMessage({ channel: CHANNEL, type: "rendered" }, "*");
-          } else if (msg.type === "setExpandLevel") {
-            currentExpandLevel = Number(msg.expandLevel ?? currentExpandLevel);
-            if (currentMd.trim()) await render(currentMd, currentExpandLevel);
-            evt.source && evt.source.postMessage({ channel: CHANNEL, type: "expanded", expandLevel: currentExpandLevel }, "*");
-          } else if (msg.type === "fit") {
-            if (mm) await mm.fit();
-          } else if (msg.type === "setFontScale") {
-            const s = Number(msg.scale);
-            document.documentElement.style.setProperty("--vat-font-scale", String(Math.min(1.6, Math.max(0.85, s || 1))));
-          }
-        } catch (err) {
-          setStatus("<b>Viewer:</b> error (open console)");
-          evt.source && evt.source.postMessage({ channel: CHANNEL, type: "error", message: String(err && err.message || err) }, "*");
-        }
+        renderRoot();
       });
 
-      try {
-        window.parent && window.parent.postMessage({ channel: CHANNEL, type: "ready" }, "*");
-        setStatus("<b>Viewer:</b> waiting for markdown…");
-      } catch (e) {
-        setStatus("<b>Viewer:</b> ready");
+      function setupBtn(id, fn) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          fn();
+        }, true);
       }
+
+      setupBtn('zin', () => {
+        expandLevel = Math.min(expandLevel + 1, 12);
+        renderRoot();
+      });
+
+      setupBtn('zout', () => {
+        expandLevel = Math.max(expandLevel - 1, 1);
+        renderRoot();
+      });
+
+      setupBtn('res', () => {
+        if (mm) mm.fit();
+      });
+
+      setupBtn('cls', () => {
+        window.parent.postMessage({ type: 'VAT_CLOSE' }, '*');
+      });
+
+      // handshake
+      window.parent.postMessage({ type: 'VAT_READY' }, '*');
     })();
   </script>
 </body>
