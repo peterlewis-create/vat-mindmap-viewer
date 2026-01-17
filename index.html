@@ -7,56 +7,21 @@
 
   <style>
     html, body { height:100%; margin:0; }
-    body{ background:#0b0f16; overflow:hidden; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+    body{
+      background:#0b0f16;
+      overflow:hidden;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    }
     #mm{ width:100vw; height:100vh; display:block; background:#0b0f16; }
     .markmap-link{ opacity:0.40; }
     foreignObject{ overflow:visible !important; }
 
-    /* Header */
+    /* NotebookLM-like header (top-left) */
     #hdr{ position:fixed; left:18px; top:16px; z-index:30; pointer-events:none; }
-    #hdrTitle{ font-size:22px; font-weight:850; color:rgba(255,255,255,0.96); margin:0 0 6px 0; }
-    #hdrSub{ font-size:13px; font-weight:650; color:rgba(255,255,255,0.62); margin:0; }
+    #hdrTitle{ font-size:22px; font-weight:850; color:rgba(255,255,255,.96); margin:0 0 6px 0; }
+    #hdrSub{ font-size:13px; font-weight:650; color:rgba(255,255,255,.62); margin:0; }
 
-    /* Pills */
-    .markmap-foreign{
-      display:flex !important; align-items:center; gap:10px;
-      padding:10px 12px; border-radius:14px;
-      background:rgba(55,65,81,0.82);
-      border:1px solid rgba(255,255,255,0.12);
-      color:rgba(255,255,255,0.96) !important;
-      font-size:16px; font-weight:800; line-height:1.18;
-      box-shadow:0 12px 34px rgba(0,0,0,0.28);
-      backdrop-filter:blur(7px);
-
-      /* default (depth>=2): wrap */
-      width:340px; max-width:340px;
-      white-space:normal !important;
-      overflow-wrap:anywhere; word-break:break-word; hyphens:auto;
-    }
-    .markmap-foreign *{ color:rgba(255,255,255,0.96) !important; }
-
-    /* depth 0/1: wide, no-wrap */
-    .mm-depth-0, .mm-depth-1{
-      width:auto !important; max-width:none !important;
-      white-space:nowrap !important;
-      font-size:17px !important; font-weight:850 !important;
-      padding:12px 14px !important;
-    }
-
-    /* Chevron */
-    .mm-expander{
-      display:inline-flex; align-items:center; justify-content:center;
-      width:20px; height:20px; border-radius:999px;
-      border:1px solid rgba(255,255,255,0.16);
-      background:rgba(0,0,0,0.18);
-      color:rgba(255,255,255,0.78);
-      font-weight:900; font-size:12px;
-      cursor:pointer;
-      pointer-events:auto;
-      flex:0 0 auto;
-    }
-
-    /* Controls */
+    /* Viewer controls (top-right) */
     #uiBar{
       position:fixed; right:14px; top:14px; z-index:40;
       display:flex; gap:8px; align-items:center;
@@ -78,6 +43,67 @@
     }
     #uiBar button:hover{ background:rgba(255,255,255,.10); }
     #uiBar .sep{ width:1px; height:22px; background:rgba(255,255,255,.14); margin:0 2px; }
+
+    /* Node pill */
+    .markmap-foreign{
+      display:flex !important;
+      align-items:center;
+      gap:10px;
+      box-sizing:border-box !important;
+      padding:10px 12px;
+      border-radius:14px;
+      background:rgba(55,65,81,0.82);
+      border:1px solid rgba(255,255,255,0.12);
+      color:rgba(255,255,255,0.96) !important;
+      font-size:16px;
+      font-weight:800;
+      line-height:1.18;
+      text-align:left;
+      box-shadow:0 12px 34px rgba(0,0,0,0.28);
+      backdrop-filter:blur(7px);
+
+      /* depth>=2 wraps */
+      width:340px;
+      max-width:340px;
+      white-space:normal !important;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+      hyphens:auto;
+      cursor:pointer;
+    }
+    .markmap-foreign *{ color:rgba(255,255,255,0.96) !important; }
+
+    /* depth 0 & 1: wide, no-wrap */
+    .mm-depth-0, .mm-depth-1{
+      width:auto !important;
+      max-width:none !important;
+      white-space:nowrap !important;
+      font-size:17px !important;
+      font-weight:850 !important;
+      padding:12px 14px !important;
+    }
+
+    /* + / − expander */
+    .mm-expander{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:22px;
+      height:22px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.18);
+      background:rgba(0,0,0,0.20);
+      color:rgba(255,255,255,0.88);
+      font-weight:950;
+      font-size:14px;
+      flex:0 0 auto;
+      cursor:pointer;
+      user-select:none;
+    }
+    .mm-expander.mm-disabled{
+      opacity:0.35;
+      cursor:default;
+    }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -106,7 +132,9 @@
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
-      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "4", 10));
+
+      // Squarespace sets init=2 for "first two levels only"
+      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10));
       const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max") || "6", 10));
 
       const svg = document.getElementById("mm");
@@ -135,6 +163,21 @@
         hdrSubEl.textContent = sources ? ("Based on " + sources + " sources") : "";
       }
 
+      // Ensure ONLY first N levels show on load (not just “initialExpandLevel”)
+      // Markmap level count includes root => INIT_LEVEL=2 means show root + its children.
+      function foldFrom(node, depth, showDepth){
+        if (!node) return;
+        node.payload ||= {};
+
+        // if depth >= (showDepth-1) then this node’s children should be folded
+        // so grandchildren disappear until expanded by user
+        if (depth >= showDepth - 1 && node.children && node.children.length) {
+          node.payload.fold = 1;
+        }
+
+        if (node.children) node.children.forEach(ch => foldFrom(ch, depth+1, showDepth));
+      }
+
       function collapseBeyond(node, depth, maxDepth){
         if (!node) return;
         node.payload ||= {};
@@ -142,12 +185,44 @@
         if (node.children) node.children.forEach(ch => collapseBeyond(ch, depth+1, maxDepth));
       }
 
-      function decorateNodes(){
+      async function fitReadable(){
+        if (!mm) return;
+        try { await mm.fit(1.02); } catch(e) {}
+        try {
+          const k = mm.state && mm.state.transform ? mm.state.transform.k : 1;
+          await mm.rescale(Math.max(k, 1.18));
+        } catch(e) {}
+      }
+
+      function setFold(inode, foldVal){
+        const d = inode && inode.data;
+        if (!d) return;
+        d.payload ||= {};
+        d.payload.fold = foldVal;
+      }
+
+      function toggle(inode){
+        const d = inode && inode.data;
+        if (!d || !d.children || !d.children.length) return;
+
+        d.payload ||= {};
+        d.payload.fold = (d.payload.fold === 1) ? 0 : 1;
+
+        mm.setData(liveRoot);
+        setTimeout(async ()=>{
+          decorateAndBind();
+          await fitReadable();      // keeps levels visually aligned after open/close
+          decorateAndBind();
+        }, 40);
+      }
+
+      function decorateAndBind(){
         svg.querySelectorAll("g.markmap-node").forEach(g=>{
           const inode = g.__data__;
           if (!inode || !inode.data) return;
 
           const depth = typeof inode.depth === "number" ? inode.depth : 0;
+
           const pill = g.querySelector(".markmap-foreign");
           if (!pill) return;
 
@@ -156,54 +231,41 @@
 
           const hasChildren = inode.data.children && inode.data.children.length;
 
-          // Expander
+          // Ensure expander exists on ALL nodes (disabled for leaf nodes)
           let exp = pill.querySelector(".mm-expander");
-          if (hasChildren) {
-            if (!exp) {
-              exp = document.createElement("span");
-              exp.className = "mm-expander";
-              pill.appendChild(exp);
-            }
-            const folded = inode.data.payload && inode.data.payload.fold === 1;
-            exp.textContent = folded ? "›" : "‹";
-          } else {
-            if (exp) exp.remove();
+          if (!exp) {
+            exp = document.createElement("span");
+            exp.className = "mm-expander";
+            pill.appendChild(exp);
           }
-        });
-      }
 
-      // REAL toggle: edit payload.fold and re-render
-      function toggleNode(inode){
-        const d = inode && inode.data;
-        if (!d || !d.children || !d.children.length) return;
+          if (hasChildren) {
+            exp.classList.remove("mm-disabled");
+            const folded = inode.data.payload && inode.data.payload.fold === 1;
+            exp.textContent = folded ? "+" : "−";
+          } else {
+            exp.classList.add("mm-disabled");
+            exp.textContent = "•";
+          }
 
-        d.payload ||= {};
-        d.payload.fold = (d.payload.fold === 1) ? 0 : 1;
+          // Bind click handlers once
+          if (pill.dataset.vatBound === "1") return;
+          pill.dataset.vatBound = "1";
 
-        // re-render; markmap keeps current transform well enough in practice
-        mm.setData(liveRoot);
-        setTimeout(decorateNodes, 30);
-      }
-
-      function bindToggleClicks(){
-        // One delegated handler; works for foreignObject content too
-        svg.addEventListener("click", (e)=>{
-          const g = e.target && e.target.closest ? e.target.closest("g.markmap-node") : null;
-          if (!g || !g.__data__) return;
-
-          const inode = g.__data__;
-          const hasChildren = inode.data && inode.data.children && inode.data.children.length;
-          if (!hasChildren) return;
-
-          // click on chevron OR pill toggles
-          const isExpander = e.target && e.target.classList && e.target.classList.contains("mm-expander");
-          const isPill = e.target && (e.target.classList && e.target.classList.contains("markmap-foreign") || e.target.closest(".markmap-foreign"));
-          if (isExpander || isPill) {
+          exp.addEventListener("click", (e)=>{
             e.preventDefault();
             e.stopPropagation();
-            toggleNode(inode);
-          }
-        }, true);
+            if (!hasChildren) return;
+            toggle(inode);
+          });
+
+          pill.addEventListener("click", (e)=>{
+            e.preventDefault();
+            e.stopPropagation();
+            if (!hasChildren) return;
+            toggle(inode);
+          });
+        });
       }
 
       async function renderMarkdown(md){
@@ -213,6 +275,9 @@
         const { root } = transformer.transform(clean);
         setHeaderFrom(root && root.content ? root.content : "");
 
+        // hard-fold so opening screen shows only first two levels
+        foldFrom(root, 0, INIT_LEVEL);
+        // and never show deeper than MAX_LEVEL unless opened step-by-step
         collapseBeyond(root, 0, MAX_LEVEL);
 
         initialRoot = deepClone(root);
@@ -225,9 +290,9 @@
           scrollForPan:true,
           duration:220,
 
-          // These two are what make level-3 feel more "stacked/vertical"
-          spacingHorizontal: 150,
-          spacingVertical: 160,
+          // “column/vertical alignment feel”
+          spacingHorizontal: 210,
+          spacingVertical: 140,
 
           paddingX: 18,
           nodeMinHeight: 26,
@@ -236,21 +301,33 @@
           initialExpandLevel: INIT_LEVEL,
 
           color: () => "rgba(148,163,184,0.60)",
-          lineWidth: () => 1.2,
+          lineWidth: () => 1.2
         };
 
         if (!mm) {
           mm = Markmap.create(svg, opts, liveRoot);
-          bindToggleClicks();
 
-          document.getElementById("zoomIn").addEventListener("click", () => mm.rescale(mm.state.transform.k * 1.15));
-          document.getElementById("zoomOut").addEventListener("click", () => mm.rescale(mm.state.transform.k / 1.15));
-          document.getElementById("overview").addEventListener("click", async ()=>{ try{ await mm.fit(1.02); }catch(e){} });
-          document.getElementById("readable").addEventListener("click", () => mm.rescale(Math.max(mm.state.transform.k, 1.25)));
-          document.getElementById("reset").addEventListener("click", ()=>{
+          document.getElementById("zoomIn").addEventListener("click", () => {
+            const k = mm.state.transform.k;
+            mm.rescale(k * 1.15);
+          });
+          document.getElementById("zoomOut").addEventListener("click", () => {
+            const k = mm.state.transform.k;
+            mm.rescale(k / 1.15);
+          });
+          document.getElementById("overview").addEventListener("click", async ()=>{ await fitReadable(); });
+          document.getElementById("readable").addEventListener("click", async ()=>{
+            const k = mm.state.transform.k;
+            await mm.rescale(Math.max(k, 1.25));
+          });
+          document.getElementById("reset").addEventListener("click", async ()=>{
             liveRoot = deepClone(initialRoot);
             mm.setData(liveRoot);
-            setTimeout(decorateNodes, 30);
+            setTimeout(async ()=>{
+              decorateAndBind();
+              await fitReadable();
+              decorateAndBind();
+            }, 40);
           });
         } else {
           mm.setOptions(opts);
@@ -258,9 +335,9 @@
         }
 
         setTimeout(async ()=>{
-          try { await mm.fit(1.02); } catch(e) {}
-          try { await mm.rescale(Math.max(mm.state.transform.k, 1.25)); } catch(e) {}
-          decorateNodes();
+          decorateAndBind();
+          await fitReadable();
+          decorateAndBind();
         }, 60);
       }
 
@@ -282,9 +359,11 @@
           const md = extractMarkdown(d);
           if (md) renderMarkdown(md);
         }
+        if (type === "FIT") {
+          fitReadable();
+        }
       });
 
-      // READY ping for Squarespace
       try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_READY" }, "*"); } catch(e) {}
     })();
   </script>
