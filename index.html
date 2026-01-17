@@ -6,62 +6,49 @@
   <title>VAT Mindmap Viewer</title>
   <style>
     :root {
-      --bg0: #0b0f14;
-      --panel: rgba(15, 23, 36, 0.9);
+      --bg: #0b0f14;
       --text: #ffffff;
+      --panel: rgba(255, 255, 255, 0.05);
     }
-
-    html, body {
-      height: 100%;
-      margin: 0;
-      background: var(--bg0);
-      overflow: hidden;
-      font-family: sans-serif;
-      color: var(--text);
-    }
-
+    html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; font-family: sans-serif; color: var(--text); }
     #svg { width: 100vw; height: 100vh; display: block; }
 
-    /* Header Styling */
-    #header {
-      position: fixed;
-      top: 25px;
-      left: 25px;
-      z-index: 100;
-      pointer-events: none;
-    }
-    #title { font-size: 26px; font-weight: 800; margin: 0; color: #fff; }
-    #subtitle { font-size: 14px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+    /* Header & Toolbars */
+    #header { position: fixed; top: 20px; left: 20px; z-index: 100; pointer-events: none; }
+    #title { font-size: 24px; font-weight: 800; margin: 0; }
+    #subtitle { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 5px; }
+    
+    #toolbar { position: fixed; top: 20px; right: 20px; z-index: 100; display: flex; gap: 10px; }
+    .tb-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; 
+              width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 18px; }
+    .tb-btn.wide { width: auto; padding: 0 15px; font-size: 14px; }
+    .tb-btn:hover { background: rgba(255,255,255,0.2); }
 
-    /* Node Readability & Vertical Spacing */
+    /* Fix Readability & Line Height */
     .markmap-foreign {
-      background: rgba(255, 255, 255, 0.15) !important;
-      border: 1px solid rgba(255, 255, 255, 0.3) !important;
-      border-radius: 12px !important;
-      padding: 10px 16px !important;
-      color: #ffffff !important;
+      background: rgba(255, 255, 255, 0.12) !important;
+      border: 1px solid rgba(255, 255, 255, 0.25) !important;
+      border-radius: 10px !important;
+      padding: 8px 15px !important;
+      color: #fff !important;
       font-weight: 700 !important;
       font-size: 15px !important;
-      /* Prevent skinny nodes */
-      min-width: 120px;
-      text-align: center;
+      white-space: nowrap; /* Forces text to stay on one line */
     }
-
-    .markmap-foreign div { color: #ffffff !important; }
-
-    /* Line (Link) Thickness */
-    .markmap-link {
-      stroke: rgba(255,255,255,0.2) !important;
-      stroke-width: 2.5px !important;
-    }
+    .markmap-foreign div { color: #fff !important; }
+    .markmap-link { stroke: rgba(255,255,255,0.2) !important; stroke-width: 2px !important; }
   </style>
 </head>
 <body>
   <div id="header">
-    <h1 id="title"></h1>
-    <p id="subtitle"></p>
+    <div id="title">Taxonomy: Animals, Food, and Catering</div>
+    <div id="subtitle">Based on 79 sources</div>
   </div>
-
+  <div id="toolbar">
+    <button class="tb-btn" id="zin">+</button>
+    <button class="tb-btn" id="zout">−</button>
+    <button class="tb-btn wide" id="close">Close</button>
+  </div>
   <svg id="svg" class="markmap"></svg>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -72,29 +59,17 @@
     (function () {
       const { Transformer, Markmap } = window.markmap;
       const svg = document.querySelector('#svg');
-      const titleEl = document.querySelector('#title');
-      const subEl = document.querySelector('#subtitle');
       let mm = null;
       const transformer = new Transformer();
 
       window.addEventListener('message', (ev) => {
-        const msg = ev.data;
-        if (msg.type !== 'VAT_SET') return;
-
-        // Set Headers
-        titleEl.textContent = msg.title || "";
-        subEl.textContent = `Based on ${msg.sourcesCount || 0} sources`;
-
-        const { root } = transformer.transform(msg.markdown || '');
-
+        if (ev.data.type !== 'VAT_SET') return;
+        const { root } = transformer.transform(ev.data.markdown || '');
         if (!mm) {
           mm = Markmap.create(svg, {
             autoFit: true,
-            duration: 400,
-            /* INCREASED VERTICAL SPACING HERE */
-            spacingVertical: 40,   
-            spacingHorizontal: 160,
-            paddingX: 20,
+            spacingVertical: 45,   // Increases height between lines
+            spacingHorizontal: 140, // Expands width
           }, root);
         } else {
           mm.setData(root);
@@ -102,6 +77,10 @@
         }
       });
 
+      // Button Actions
+      document.getElementById('zin').onclick = () => mm.rescale(1.25);
+      document.getElementById('zout').onclick = () => mm.rescale(0.8);
+      document.getElementById('close').onclick = () => window.parent.postMessage({type:'VAT_CLOSE'}, '*');
       window.parent.postMessage({ type: 'VAT_READY' }, '*');
     })();
   </script>
