@@ -14,11 +14,8 @@
     }
     #wrap { position: fixed; inset: 0; }
     svg { width: 100%; height: 100%; display: block; }
-
-    /* Background rectangle that markmap draws */
     rect.markmap-bg { fill: #070b14; }
 
-    /* Text styling inside nodes */
     :root { --vat-font-scale: 1; }
     .markmap-foreign { color: #eaf2ff; }
     .markmap-foreign > div {
@@ -31,10 +28,7 @@
       box-shadow: 0 10px 30px rgba(0,0,0,0.35);
       backdrop-filter: blur(3px);
     }
-    .markmap-foreign a { color: #b9d4ff; text-decoration: none; }
-    .markmap-foreign a:hover { text-decoration: underline; }
 
-    /* Status pill */
     #status {
       position: fixed;
       left: 14px;
@@ -51,11 +45,12 @@
     #status b { font-weight: 700; }
   </style>
 
-  <!-- Markmap CDN (pinned versions for stability) -->
+  <!-- Markmap CDN -->
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.12"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12"></script>
 </head>
+
 <body>
   <div id="wrap">
     <svg id="mm"></svg>
@@ -77,8 +72,25 @@
       let currentMd = "";
       let currentExpandLevel = 2;
 
-      function setStatus(text) {
-        statusEl.innerHTML = text;
+      function setStatus(text) { statusEl.innerHTML = text; }
+
+      function toArray(x) {
+        if (!x) return [];
+        return Array.isArray(x) ? x : [x];
+      }
+
+      // Some builds can return strings/objects: normalise to an array of URL strings
+      function toUrlArray(items) {
+        const arr = toArray(items).filter(Boolean);
+        const out = [];
+        for (const v of arr) {
+          if (typeof v === "string") out.push(v);
+          else if (v && typeof v === "object") {
+            if (typeof v.href === "string") out.push(v.href);
+            else if (typeof v.src === "string") out.push(v.src);
+          }
+        }
+        return out;
       }
 
       async function render(md, expandLevel) {
@@ -88,9 +100,6 @@
         const safeMd = currentMd.trim();
         if (!safeMd) {
           setStatus("<b>Viewer:</b> waiting for markdown…");
-          if (mm) {
-            try { await mm.setData(null); } catch (e) {}
-          }
           return;
         }
 
@@ -99,10 +108,11 @@
         const { root, features } = transformer.transform(safeMd);
         const assets = transformer.getAssets(features);
 
-        if (assets.styles) loadCSS(assets.styles);
-        if (assets.scripts) {
-          await loadJS(assets.scripts, { getMarkmap: () => window.markmap });
-        }
+        const styles = toUrlArray(assets && assets.styles);
+        const scripts = toUrlArray(assets && assets.scripts);
+
+        if (styles.length) loadCSS(styles);
+        if (scripts.length) await loadJS(scripts, { getMarkmap: () => window.markmap });
 
         if (!mm) {
           mm = Markmap.create(svg, {
@@ -119,7 +129,6 @@
         setStatus("<b>Viewer:</b> ready");
       }
 
-      // postMessage handler
       window.addEventListener("message", async (evt) => {
         const msg = evt && evt.data;
         if (!msg || typeof msg !== "object") return;
@@ -145,20 +154,11 @@
         }
       });
 
-      // handshake
       try {
         window.parent && window.parent.postMessage({ channel: CHANNEL, type: "ready" }, "*");
         setStatus("<b>Viewer:</b> waiting for markdown…");
       } catch (e) {
         setStatus("<b>Viewer:</b> ready");
-      }
-
-      // Optional: render something if opened directly without parent
-      if (location.hash && location.hash.startsWith("#md=")) {
-        try {
-          const md = decodeURIComponent(location.hash.slice(4));
-          render(md, currentExpandLevel);
-        } catch (e) {}
       }
     })();
   </script>
