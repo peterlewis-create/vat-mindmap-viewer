@@ -49,39 +49,63 @@
     /* Links */
     .markmap-link { stroke: rgba(255,255,255,0.40) !important; stroke-width: 2.5px !important; }
 
-    /* === TEXT READABILITY (critical) ===
-       Markmap can render text via SVG <text> OR via foreignObject.
-       We force BOTH to be large + white + outlined.
+    /* ========= READABILITY + BIGGER BOXES =========
+       Markmap may render nodes via:
+       - foreignObject (.markmap-foreign)
+       - SVG text
+       We force BOTH to be big and readable.
     */
-    /* SVG text */
-    .markmap text,
-    .markmap .markmap-node text,
-    .markmap .markmap-node-text {
-      fill: #ffffff !important;
-      font-size: 20px !important;
-      font-weight: 900 !important;
-      paint-order: stroke !important;
-      stroke: rgba(0,0,0,0.95) !important;
-      stroke-width: 5px !important;
-      stroke-linejoin: round !important;
-    }
 
-    /* foreignObject text */
-    .markmap foreignObject,
-    .markmap foreignObject * {
-      color: #ffffff !important;
-      font-size: 20px !important;
-      font-weight: 900 !important;
-    }
-
-    /* Box readability (if foreignObject boxes are used) */
+    /* foreignObject boxes (this is what gives the rounded “tax boxes”) */
     .markmap-foreign {
       background: #111827 !important;
       border: 2px solid #3b82f6 !important;
-      border-radius: 10px !important;
-      padding: 12px 20px !important;
-      box-shadow: 0 10px 24px rgba(0,0,0,0.65) !important;
+      border-radius: 12px !important;
+
+      /* >>> make boxes ~2× taller */
+      padding: 20px 26px !important;
+      min-height: 64px !important;
+
+      /* text */
+      color: #ffffff !important;
+      font-weight: 900 !important;
+      font-size: 22px !important;
+      line-height: 1.15 !important;
+
+      /* layout */
+      display: inline-flex !important;
+      align-items: center !important;
       white-space: nowrap !important;
+
+      box-shadow: 0 10px 26px rgba(0,0,0,0.70) !important;
+      overflow: visible !important;
+    }
+    .markmap-foreign div {
+      color: #ffffff !important;
+      background: transparent !important;
+    }
+
+    /* If markmap renders SVG text, force it readable too */
+    .markmap text,
+    .markmap .markmap-node text {
+      fill: #ffffff !important;
+      font-size: 22px !important;
+      font-weight: 900 !important;
+
+      /* outline so it never “disappears” */
+      paint-order: stroke !important;
+      stroke: rgba(0,0,0,0.95) !important;
+      stroke-width: 6px !important;
+      stroke-linejoin: round !important;
+    }
+
+    /* foreignObject inner text safety net */
+    .markmap foreignObject,
+    .markmap foreignObject * {
+      color: #ffffff !important;
+      font-size: 22px !important;
+      font-weight: 900 !important;
+      line-height: 1.15 !important;
     }
   </style>
 </head>
@@ -95,7 +119,7 @@
   <div id="toolbar">
     <button class="tb-btn" id="plus"  type="button" title="Show one more level">+</button>
     <button class="tb-btn" id="minus" type="button" title="Hide one level">−</button>
-    <button class="tb-btn text-btn" id="fit"  type="button" title="Fit to screen">Resize</button>
+    <button class="tb-btn text-btn" id="fit"  type="button" title="Reset view">Resize</button>
     <button class="tb-btn text-btn" id="close" type="button" title="Close">Close</button>
   </div>
 
@@ -120,7 +144,6 @@
         return JSON.parse(JSON.stringify(obj));
       }
 
-      // Collapse children starting at maxDepth (depth 0 = root)
       function applyFoldByDepth(node, depth, maxDepth) {
         if (!node) return;
         if (!node.payload) node.payload = {};
@@ -143,88 +166,90 @@
         if (!mm) {
           mm = Markmap.create(svg, {
             autoFit: true,
-            spacingVertical: 60,
-            spacingHorizontal: 160,
+            spacingVertical: 70,
+            spacingHorizontal: 180,
           }, root);
-          wireNodeMagnify();  // attach click handlers after first render
+          wireNodeMagnify();
         } else {
           mm.setData(root);
-          mm.fit();
-          wireNodeMagnify();  // re-attach because nodes get re-rendered
+          resetView(true); // after changing fold levels, reset neatly
+          wireNodeMagnify();
         }
 
         const lvl = document.getElementById('lvl');
         if (lvl) lvl.textContent = 'Expand level: ' + expandLevel + ' (click a node to magnify)';
       }
 
-      // === Magnify & center clicked node ===
+      /* === TRUE RESET (fixes your Resize button) ===
+         1) cancel any active zoom transitions
+         2) reset zoom transform
+         3) then fit the whole map
+      */
+      function resetView(skipInterrupt) {
+        if (!mm) return;
+
+        const sel = d3.select(svg);
+        try { if (!skipInterrupt) sel.interrupt(); } catch (e) {}
+
+        // Hard reset zoom/pan first
+        try {
+          if (mm.zoom && mm.zoom.transform) {
+            sel.call(mm.zoom.transform, d3.zoomIdentity);
+          }
+        } catch (e) {}
+
+        // Then fit to screen
+        setTimeout(() => {
+          try { mm.fit && mm.fit(); } catch (e) {}
+        }, 0);
+      }
+
+      /* === Magnify clicked node === */
       function zoomToNodeElement(nodeEl, strength) {
         if (!mm || !mm.zoom) return;
 
         const svgRect = svg.getBoundingClientRect();
         const nodeRect = nodeEl.getBoundingClientRect();
 
-        // Node center in screen coords relative to SVG origin
         const cx = (nodeRect.left + nodeRect.right) / 2 - svgRect.left;
         const cy = (nodeRect.top + nodeRect.bottom) / 2 - svgRect.top;
 
-        // Current zoom transform
         const t = d3.zoomTransform(svg);
+        const p = t.invert([cx, cy]);
 
-        // Convert screen center -> graph coords
-        const p = t.invert([cx, cy]); // p is in the unscaled graph coordinate space
-
-        // Target scale (magnify)
         const k2 = Math.max(1, Math.min(6, t.k * strength));
-
-        // Center the clicked node
         const x2 = (svgRect.width  / 2) - (p[0] * k2);
         const y2 = (svgRect.height / 2) - (p[1] * k2);
 
         const tr = d3.zoomIdentity.translate(x2, y2).scale(k2);
 
         d3.select(svg)
+          .interrupt()
           .transition()
           .duration(220)
           .call(mm.zoom.transform, tr);
       }
 
       function wireNodeMagnify() {
-        // markmap nodes are rendered as g elements; we attach to any group that looks like a node
-        const sel = d3.select(svg).selectAll('g');
-        sel.style('cursor', function () {
-          // only show pointer cursor for node-ish groups (those that contain text)
+        const groups = d3.select(svg).selectAll('g');
+        groups.style('cursor', function () {
           const hasText = this.querySelector('text') || this.querySelector('foreignObject');
           return hasText ? 'pointer' : null;
         });
 
-        sel.on('click.vatFocus', null); // clear previous handler
-
-        sel.on('click.vatFocus', function(event) {
+        groups.on('click.vatFocus', null);
+        groups.on('click.vatFocus', function(event) {
           const isNode = this.querySelector('text') || this.querySelector('foreignObject');
           if (!isNode) return;
 
           event.preventDefault();
           event.stopPropagation();
 
-          // If user is at level 4+ they want strong magnify; otherwise moderate
-          const strength = (expandLevel >= 4) ? 1.8 : 1.45;
+          // stronger zoom once you're looking deeper
+          const strength = (expandLevel >= 4) ? 2.1 : 1.6;
           zoomToNodeElement(this, strength);
         });
       }
-
-      // Receive markdown from Squarespace
-      window.addEventListener('message', (ev) => {
-        if (!ev.data || ev.data.type !== 'VAT_SET') return;
-
-        expandLevel = Number(ev.data.expandLevel || 2);
-        if (!Number.isFinite(expandLevel)) expandLevel = 2;
-        expandLevel = Math.max(1, Math.min(10, expandLevel));
-
-        const { root } = transformer.transform(String(ev.data.markdown || ''));
-        baseRoot = root;
-        render();
-      });
 
       function safe(fn){
         return function(e){
@@ -243,18 +268,32 @@
         render();
       }), true);
 
+      // Resize should always reset to the “original screen”
       document.getElementById('fit').addEventListener('click', safe(() => {
-        if (mm) mm.fit();
+        resetView();
       }), true);
 
       document.getElementById('close').addEventListener('click', safe(() => {
         window.parent.postMessage({ type: 'VAT_CLOSE' }, '*');
       }), true);
 
-      // Click empty background => fit (handy after magnify)
-      svg.addEventListener('click', (e) => {
-        // if they clicked an actual node, the handler above stops propagation
-        if (mm) mm.fit();
+      // Background click => reset view (very useful after magnify)
+      svg.addEventListener('click', () => resetView(), { passive: true });
+
+      // Receive markdown from Squarespace
+      window.addEventListener('message', (ev) => {
+        if (!ev.data || ev.data.type !== 'VAT_SET') return;
+
+        expandLevel = Number(ev.data.expandLevel || 2);
+        if (!Number.isFinite(expandLevel)) expandLevel = 2;
+        expandLevel = Math.max(1, Math.min(10, expandLevel));
+
+        const { root } = transformer.transform(String(ev.data.markdown || ''));
+        baseRoot = root;
+
+        // First render then fit (ensures Resize works from the start)
+        render();
+        setTimeout(() => resetView(), 50);
       });
 
       window.parent.postMessage({ type: 'VAT_READY' }, '*');
