@@ -12,37 +12,29 @@
       overflow:hidden;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     }
-    #mm{
-      width:100vw;
-      height:100vh;
-      display:block;
-      background:#0b0f16;
-    }
+    #mm{ width:100vw; height:100vh; display:block; background:#0b0f16; }
+    .markmap-link{ opacity:0.40; }
 
-    .markmap-link{ opacity:0.38; }
-
-    /* Readable nodes (this is what you care about most) */
+    /* BIGGER + readable */
     .markmap-foreign{
       display:inline-block;
-      padding:10px 12px;
-      border-radius:14px;
-      background:rgba(55,65,81,0.82);
-      border:1px solid rgba(255,255,255,0.10);
-      color:rgba(255,255,255,0.92);
-      box-shadow:0 10px 30px rgba(0,0,0,0.28);
-      backdrop-filter:blur(6px);
+      padding:12px 14px;
+      border-radius:16px;
+      background:rgba(55,65,81,0.84);
+      border:1px solid rgba(255,255,255,0.12);
+      color:rgba(255,255,255,0.94);
+      box-shadow:0 12px 34px rgba(0,0,0,0.30);
+      backdrop-filter:blur(7px);
 
-      font-size:15px;
-      line-height:1.18;
+      font-size:17px;         /* <<< bigger */
+      line-height:1.20;
 
-      /* Keep captions compact so 6 steps can still be reached without massive zoom-out */
-      max-width:300px;
+      max-width:360px;        /* still capped so routes don't explode */
       white-space:normal;
       word-break:break-word;
       hyphens:auto;
     }
 
-    /* Simple in-view controls (works in embed mode too) */
     #uiBar{
       position:fixed;
       right:14px;
@@ -65,15 +57,12 @@
       color:rgba(255,255,255,.92);
       border-radius:12px;
       padding:9px 10px;
-      font:700 12px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      font:800 12px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
       cursor:pointer;
     }
     #uiBar button:hover{ background:rgba(255,255,255,.10); }
-    #uiBar .sep{
-      width:1px; height:22px;
-      background:rgba(255,255,255,.14);
-      margin:0 2px;
-    }
+    #uiBar .sep{ width:1px; height:22px; background:rgba(255,255,255,.14); margin:0 2px; }
+
     #hint{
       position:fixed;
       left:12px;
@@ -97,7 +86,7 @@
 </head>
 
 <body>
-  <div id="hint">Click: expand/collapse • Shift+Click: focus route • Pan: drag • Zoom: wheel/trackpad or +/- • Esc: reset</div>
+  <div id="hint">Click: expand/collapse • Shift+Click: focus route • Drag to pan • +/- to zoom • Esc: reset</div>
 
   <div id="uiBar">
     <button id="zoomIn" type="button">+</button>
@@ -115,13 +104,13 @@
       const EMBED = params.get("embed") === "1";
       if (EMBED) document.getElementById("hint").classList.add("hidden");
 
-      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10)); // keep overview clean
-      const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max")  || "6", 10)); // collapse beyond 6 on load
+      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10));
+      const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max")  || "6", 10));
 
-      // This is the key: we START readable and we DO NOT auto-shrink on node clicks.
-      const TARGET_SCALE = 1.25;  // readable default
-      const MIN_SCALE    = 0.80;  // user can zoom out if they want
-      const MAX_SCALE    = 2.60;  // user can zoom in
+      // FORCE readability:
+      const TARGET_SCALE = 1.45;  // start here
+      const MIN_SCALE    = 1.20;  // never allow smaller (this is what fixes unreadable text)
+      const MAX_SCALE    = 2.80;
 
       const svg = document.getElementById("mm");
       const { Transformer } = window.markmap;
@@ -132,45 +121,10 @@
       const branchColor = d3.scaleOrdinal(palette);
 
       let mm = null;
-      let initialRoot = null; // for Reset
+      let initialRoot = null;
       let liveRoot = null;
 
       function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
-
-      function parseColorToRGB(c){
-        if (!c) return null;
-        const m = c.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-        if (m) return { r:+m[1], g:+m[2], b:+m[3] };
-        const hx = c.trim().match(/^#([0-9a-f]{6}|[0-9a-f]{3})$/i);
-        if (hx){
-          let h = hx[1];
-          if (h.length === 3) h = h.split("").map(ch => ch+ch).join("");
-          return { r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16) };
-        }
-        return null;
-      }
-      function rgbaFrom(c,a){
-        const rgb = parseColorToRGB(c);
-        if (!rgb) return `rgba(255,255,255,${a})`;
-        return `rgba(${rgb.r},${rgb.g},${rgb.b},${a})`;
-      }
-      function tintNodePills(){
-        svg.querySelectorAll("g.markmap-node").forEach(g=>{
-          const circle = g.querySelector("circle");
-          const pill = g.querySelector(".markmap-foreign");
-          if (!circle || !pill) return;
-          const col = circle.getAttribute("fill") || circle.getAttribute("stroke") || "";
-          pill.style.backgroundColor = rgbaFrom(col, 0.18);
-          pill.style.borderColor = rgbaFrom(col, 0.34);
-        });
-      }
-
-      function collapseBeyond(node, depth, maxDepth){
-        if (!node) return;
-        node.payload ||= {};
-        if (depth >= maxDepth) node.payload.fold = 1;
-        if (node.children) node.children.forEach(ch => collapseBeyond(ch, depth+1, maxDepth));
-      }
 
       function currentScale(){
         return (mm && mm.state && mm.state.transform && typeof mm.state.transform.k === "number")
@@ -184,14 +138,12 @@
         try { await mm.rescale(kk); } catch(e) {}
       }
 
-      // Keep the “end” of an expanded route visible WITHOUT shrinking text:
-      // we pan, not shrink.
+      // Keep end of expanded route visible (PAN, not shrink)
       function rightMostOpen(inode){
         let cur = inode;
         while (cur && cur.children && cur.children.length) {
           const kids = cur.children;
           const last = kids[kids.length - 1];
-          // stop if folded
           if (last && last.data && last.data.payload && last.data.payload.fold === 1) break;
           cur = last;
         }
@@ -200,10 +152,18 @@
 
       async function keepEndVisible(inode){
         if (!mm || !inode) return;
+        // ensure readable scale
+        await rescaleClamped(Math.max(currentScale(), TARGET_SCALE));
+        // pan to end node
         const end = rightMostOpen(inode);
-        try { await mm.ensureVisible(end, { left:80, right:140, top:80, bottom:80 }); } catch(e) {}
-        tintNodePills();
-        bindNodeHandlers();
+        try { await mm.ensureVisible(end, { left:90, right:160, top:90, bottom:90 }); } catch(e) {}
+      }
+
+      function collapseBeyond(node, depth, maxDepth){
+        if (!node) return;
+        node.payload ||= {};
+        if (depth >= maxDepth) node.payload.fold = 1;
+        if (node.children) node.children.forEach(ch => collapseBeyond(ch, depth+1, maxDepth));
       }
 
       function reset(){
@@ -212,9 +172,8 @@
         mm.setData(liveRoot);
         setTimeout(async ()=>{
           await rescaleClamped(TARGET_SCALE);
-          try { await mm.fit(1.05); } catch(e) {} // small fit to center, not to shrink
+          try { await mm.fit(1.02); } catch(e) {}  // gentle center only
           await rescaleClamped(Math.max(currentScale(), TARGET_SCALE));
-          tintNodePills();
           bindNodeHandlers();
         }, 30);
       }
@@ -226,13 +185,11 @@
         let p = inode;
         while (p) { path.add(p.data); p = p.parent; }
 
-        // Collapse other top-level branches so the chosen route becomes the “main view”
         liveRoot.children.forEach(ch=>{
           ch.payload ||= {};
           ch.payload.fold = path.has(ch) ? 0 : 1;
         });
 
-        // Open nodes on the path
         (function openPath(node){
           if (!node) return;
           node.payload ||= {};
@@ -241,12 +198,7 @@
         })(liveRoot);
 
         mm.setData(liveRoot);
-
-        setTimeout(async ()=>{
-          // Keep it readable; just pan to end.
-          await rescaleClamped(Math.max(currentScale(), TARGET_SCALE));
-          await keepEndVisible(inode);
-        }, 30);
+        setTimeout(()=>keepEndVisible(inode), 30);
       }
 
       function bindNodeHandlers(){
@@ -263,9 +215,7 @@
               setTimeout(()=>focusRoute(inode), 0);
               return;
             }
-
-            // Normal click: Markmap toggles; then we PAN to keep new end visible.
-            // Crucially: no auto-fit that shrinks text.
+            // Normal click: toggle then pan to keep end visible (no shrinking)
             setTimeout(()=>keepEndVisible(inode), 0);
           });
         });
@@ -276,8 +226,6 @@
         if (!clean) return;
 
         const { root } = transformer.transform(clean);
-
-        // Collapse beyond 6 on load, but user can expand deeper manually
         collapseBeyond(root, 0, MAX_LEVEL);
 
         initialRoot = deepClone(root);
@@ -290,16 +238,14 @@
           scrollForPan:true,
           duration:220,
 
-          // Layout tuned for “decision tree” experience
-          spacingHorizontal: 140,
-          spacingVertical: 95,   // helps siblings spread vertically
+          spacingHorizontal: 150,
+          spacingVertical: 105,   // helps 3–4 children spread vertically
           paddingX: 18,
-          nodeMinHeight: 22,
-          maxWidth: 300,
+          nodeMinHeight: 24,
+          maxWidth: 360,
 
           initialExpandLevel: INIT_LEVEL,
 
-          // Colour per top-level branch (NotebookLM-ish)
           color: (node) => {
             if (!node || !node.parent) return "rgba(148,163,184,0.55)";
             let p = node;
@@ -307,35 +253,24 @@
             const key = (p && p.data && p.data.content) ? p.data.content : "branch";
             return branchColor(key);
           },
-          lineWidth: () => 1.15,
+          lineWidth: () => 1.20,
         };
 
         if (!mm) {
           mm = Markmap.create(svg, opts, liveRoot);
 
-          // UI buttons
           document.getElementById("zoomIn").addEventListener("click", () => rescaleClamped(currentScale() * 1.15));
           document.getElementById("zoomOut").addEventListener("click", () => rescaleClamped(currentScale() / 1.15));
           document.getElementById("fit").addEventListener("click", async () => {
-            // User-requested: fit whole view, but don’t permanently wreck readability:
-            // fit first, then let user zoom back in.
-            try { await mm.fit(1.05); } catch(e) {}
-            tintNodePills();
+            try { await mm.fit(1.02); } catch(e) {}
           });
           document.getElementById("reset").addEventListener("click", reset);
 
-          // Keyboard zoom + reset
           document.addEventListener("keydown", (e)=>{
             if (e.key === "Escape") reset();
             if (e.key === "+" || e.key === "=") rescaleClamped(currentScale() * 1.15);
             if (e.key === "-" || e.key === "_") rescaleClamped(currentScale() / 1.15);
             if (e.key === "0") rescaleClamped(TARGET_SCALE);
-          });
-
-          // Double-click background: fit (user action)
-          svg.addEventListener("dblclick", (e)=>{
-            if (e.target && e.target.closest && e.target.closest("g.markmap-node")) return;
-            mm.fit(1.05).then(()=>tintNodePills()).catch(()=>{});
           });
         } else {
           mm.setOptions(opts);
@@ -345,9 +280,8 @@
         // Start readable + centered
         setTimeout(async ()=>{
           await rescaleClamped(TARGET_SCALE);
-          try { await mm.fit(1.05); } catch(e) {}
+          try { await mm.fit(1.02); } catch(e) {}
           await rescaleClamped(Math.max(currentScale(), TARGET_SCALE));
-          tintNodePills();
           bindNodeHandlers();
         }, 40);
       }
@@ -363,7 +297,6 @@
         return "";
       }
 
-      // Listen for Squarespace postMessage
       window.addEventListener("message", (event)=>{
         const d = event.data;
         const type = (d && typeof d === "object" && d.type) ? d.type : "";
@@ -371,10 +304,8 @@
           const md = extractMarkdown(d);
           if (md) renderMarkdown(md);
         }
-        if (type === "FIT" && mm) mm.fit(1.05).then(()=>tintNodePills()).catch(()=>{});
       });
 
-      // Handshake for Squarespace
       function notifyReady(){
         try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_READY" }, "*"); } catch(e) {}
       }
