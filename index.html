@@ -2,321 +2,391 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
-
   <style>
-    html, body { height:100%; margin:0; }
-    body{
-      background:#0b0f16;
-      overflow:hidden;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    }
-    #mm{ width:100vw; height:100vh; display:block; background:#0b0f16; }
-
-    g.markmap-node, g.markmap-node foreignObject, .markmap-foreign { pointer-events:auto !important; }
-    .markmap-link{ opacity:0.40; }
-    foreignObject{ overflow:visible !important; }
-
-    /* Header (NotebookLM-like) */
-    #hdr{
-      position:fixed; left:18px; top:16px;
-      z-index:30; pointer-events:none;
-    }
-    #hdrTitle{ font-size:22px; font-weight:850; color:rgba(255,255,255,.96); margin:0 0 6px 0; }
-    #hdrSub{ font-size:13px; font-weight:650; color:rgba(255,255,255,.62); margin:0; }
-
-    /* Toolbar */
-    #uiBar{
-      position:fixed; right:14px; top:14px; z-index:40;
-      display:flex; gap:8px; align-items:center;
-      padding:10px; border-radius:14px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(0,0,0,.32);
-      backdrop-filter:blur(8px);
-      user-select:none;
-    }
-    #uiBar button{
-      appearance:none;
-      border:1px solid rgba(255,255,255,.18);
-      background:rgba(255,255,255,.06);
-      color:rgba(255,255,255,.92);
-      border-radius:12px;
-      padding:9px 10px;
-      font:850 12px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-      cursor:pointer;
-      white-space:nowrap;
-    }
-    #uiBar button:hover{ background:rgba(255,255,255,.10); }
-    #uiBar .sep{ width:1px; height:22px; background:rgba(255,255,255,.14); margin:0 2px; }
-
-    /* Node pills */
-    .markmap-foreign{
-      display:flex !important;
-      align-items:center;
-      gap:10px;
-      box-sizing:border-box !important;
-      padding:10px 12px;
-      border-radius:14px;
-      background:rgba(55,65,81,0.82);
-      border:1px solid rgba(255,255,255,0.12);
-      color:rgba(255,255,255,0.96) !important;
-      font-size:15px;
-      font-weight:800;
-      line-height:1.18;
-      text-align:left;
-      box-shadow:0 12px 34px rgba(0,0,0,0.28);
-      backdrop-filter:blur(7px);
-      width:340px; max-width:340px;
-      white-space:normal !important;
-      overflow-wrap:anywhere;
-      word-break:break-word;
-      hyphens:auto;
-      cursor:pointer;
-    }
-    .markmap-foreign *{ color:rgba(255,255,255,0.96) !important; }
-
-    .mm-depth-0{
-      width:420px !important; max-width:420px !important;
-      font-size:16px !important; font-weight:900 !important;
-      padding:12px 14px !important;
+    :root{
+      --bg0:#0b0f14;
+      --bg1:#0a1118;
+      --panel: rgba(15, 23, 36, 0.72);
+      --panel2: rgba(15, 23, 36, 0.55);
+      --stroke: rgba(255,255,255,0.12);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.62);
+      --btn: rgba(255,255,255,0.10);
+      --btnHover: rgba(255,255,255,0.16);
+      --nodeBg: rgba(255,255,255,0.10);
+      --nodeBgLeaf: rgba(62, 160, 96, 0.22);
+      --nodeBorder: rgba(255,255,255,0.14);
+      --shadow: 0 12px 30px rgba(0,0,0,0.35);
     }
 
-    /* Expander button */
-    .mm-expander{
-      display:inline-flex; align-items:center; justify-content:center;
-      width:26px; height:26px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,0.22);
-      background:rgba(0,0,0,0.24);
-      color:rgba(255,255,255,0.92);
-      font-weight:950; font-size:15px;
-      flex:0 0 auto;
-      user-select:none;
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: radial-gradient(1200px 700px at 30% 20%, #0d1520 0%, var(--bg0) 45%, #070b10 100%);
+      overflow: hidden;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color: var(--text);
     }
-    .mm-expander.mm-disabled{ opacity:0.30; }
+
+    /* Fullscreen canvas */
+    #svg {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+
+    /* Header (NotebookLM style) */
+    #header {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      z-index: 50;
+      pointer-events: none;
+      max-width: min(900px, calc(100vw - 360px));
+    }
+    #title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin: 0 0 6px 0;
+      text-shadow: 0 8px 24px rgba(0,0,0,0.45);
+      pointer-events: none;
+    }
+    #subtitle {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      margin: 0;
+      pointer-events: none;
+    }
+
+    /* Toolbar (top-right) */
+    #toolbar {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 60;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      border-radius: 16px;
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .tb-btn {
+      appearance: none;
+      border: 1px solid var(--stroke);
+      background: var(--btn);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 13px;
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tb-btn:hover { background: var(--btnHover); }
+    .tb-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      font-size: 16px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    /* Markmap styling overrides */
+    .markmap {
+      background: transparent !important;
+    }
+    /* Link curves */
+    .markmap-link {
+      stroke: rgba(255,255,255,0.20) !important;
+      stroke-width: 1.35 !important;
+    }
+
+    /* Node pills rendered inside foreignObject */
+    .markmap-foreign {
+      background: var(--nodeBg);
+      border: 1px solid var(--nodeBorder);
+      border-radius: 999px;
+      padding: 9px 14px;
+      box-shadow: 0 10px 22px rgba(0,0,0,0.28);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      max-width: 320px; /* keeps vertical alignment by forcing wrapping */
+      pointer-events: auto; /* allow clicking expander */
+    }
+    /* leaf nodes slightly greener */
+    .vat-leaf .markmap-foreign {
+      background: var(--nodeBgLeaf);
+    }
+
+    /* label text: wrap and stay readable */
+    .markmap-foreign > div,
+    .markmap-foreign {
+      color: var(--text) !important;
+      font-weight: 800 !important;
+      font-size: 14px !important;
+      line-height: 1.15 !important;
+      white-space: normal !important;
+      word-break: break-word !important;
+      text-wrap: pretty;
+    }
+
+    /* expander button (right side of pill) */
+    .vat-expander {
+      margin-left: 6px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.10);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      flex: 0 0 auto;
+      padding: 0;
+      line-height: 1;
+      font-weight: 900;
+      pointer-events: auto;
+    }
+    .vat-expander:hover { background: rgba(255,255,255,0.16); }
+
+    /* Mobile: shrink header a bit */
+    @media (max-width: 640px) {
+      #title { font-size: 20px; }
+      #toolbar { transform: scale(0.92); transform-origin: top right; }
+      .markmap-foreign { max-width: 260px; }
+    }
   </style>
-
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib/dist/browser/index.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view/dist/browser/index.min.js"></script>
 </head>
 
 <body>
-  <div id="hdr">
-    <div id="hdrTitle"></div>
-    <div id="hdrSub"></div>
+  <div id="header">
+    <h1 id="title">UK VAT - Food, Drink and Animal Feed</h1>
+    <p id="subtitle">Based on 0 sources</p>
   </div>
 
-  <div id="uiBar">
-    <button id="zoomIn" type="button">+</button>
-    <button id="zoomOut" type="button">−</button>
-    <div class="sep"></div>
-    <button id="overview" type="button">Overview</button>
-    <button id="readable" type="button">Readable</button>
-    <div class="sep"></div>
-    <button id="reset" type="button">Reset</button>
-    <button id="closeBtn" type="button">Close</button>
+  <div id="toolbar">
+    <button class="tb-btn tb-icon" id="zoomIn"  title="Zoom in">+</button>
+    <button class="tb-btn tb-icon" id="zoomOut" title="Zoom out">−</button>
+    <button class="tb-btn" id="overview" title="Return to opening view (Level 1–2)">Overview</button>
+    <button class="tb-btn" id="readable" title="Toggle larger text">Readable</button>
+    <button class="tb-btn" id="reset" title="Reset view">Reset</button>
+    <button class="tb-btn" id="close" title="Close">Close</button>
   </div>
 
-  <svg id="mm"></svg>
+  <svg id="svg" class="markmap"></svg>
+
+  <!-- Markmap dependencies (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
 
   <script>
     (function () {
-      const params = new URLSearchParams(location.search);
-
-      // YOU WANT: open at level 2 only
-      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10));
-      const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max") || "10", 10));
-
-      const svg = document.getElementById("mm");
       const { Transformer } = window.markmap;
       const { Markmap } = window.markmap;
 
-      const transformer = new Transformer();
-      const hdrTitleEl = document.getElementById("hdrTitle");
-      const hdrSubEl   = document.getElementById("hdrSub");
+      const svg = document.querySelector('#svg');
+      const titleEl = document.querySelector('#title');
+      const subEl = document.querySelector('#subtitle');
 
       let mm = null;
-      let initialData = null;
+      let transformer = new Transformer();
+      let lastMsg = null;
+      let readable = false;
 
-      function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
-      function ensurePayload(n){ if (!n.payload || typeof n.payload !== "object") n.payload = {}; return n.payload; }
-      function hasChildren(n){ return !!(n && Array.isArray(n.children) && n.children.length); }
-
-      function decodeHtmlEntities(str){
-        const t = document.createElement("textarea");
-        t.innerHTML = String(str || "");
-        return t.value;
+      // For stable zoom behaviour:
+      function getScale() {
+        try { return (mm && mm.state && mm.state.transform && mm.state.transform.k) ? mm.state.transform.k : 1; }
+        catch { return 1; }
       }
-
-      function setHeaderFrom(titleText){
-        hdrTitleEl.textContent = decodeHtmlEntities(titleText || "").trim() || "UK VAT Taxonomy";
-        const sources = params.get("sources");
-        hdrSubEl.textContent = sources ? ("Based on " + sources + " sources") : "";
-      }
-
-      // KEY: fold using Markmap payload (keeps children, allows expand/collapse at every node)
-      function setFold(n, fold){
-        const p = ensurePayload(n);
-        p.fold = fold ? 1 : 0;
-      }
-
-      // Open at 2 levels: fold every node that is at depth >= (INIT_LEVEL - 1)
-      // Example: INIT_LEVEL=2 => fold nodes at depth >=1 (i.e., Level 2 nodes start with "+" if they have children)
-      function applyInitialFolding(n, depth){
-        ensurePayload(n);
-
-        if (depth >= INIT_LEVEL - 1) setFold(n, true);
-        else setFold(n, false);
-
-        (n.children || []).forEach(ch => applyInitialFolding(ch, depth + 1));
-      }
-
-      // Optional safety: prevent showing beyond MAX_LEVEL (fold from boundary)
-      function capMaxDepth(n, depth){
-        ensurePayload(n);
-        if (depth >= MAX_LEVEL - 1) setFold(n, true);
-        (n.children || []).forEach(ch => capMaxDepth(ch, depth + 1));
-      }
-
-      async function fitClamped(maxK){
+      function setScale(newK) {
         if (!mm) return;
-        try { await mm.fit(1.02); } catch(e) {}
-        try{
-          const k = (mm.state && mm.state.transform && mm.state.transform.k) ? mm.state.transform.k : 1;
-          if (k > maxK) await mm.rescale(maxK / k);
-        }catch(e){}
+        const k = Math.max(0.2, Math.min(4, newK));
+        mm.rescale(k);
       }
 
-      function toggleFold(d){
-        if (!d || !hasChildren(d)) return;
-        const p = ensurePayload(d);
-        p.fold = (p.fold === 1) ? 0 : 1;
-        mm.setData(mm.state.data);
-        setTimeout(()=>decorate(), 40);
+      function buildMap(markdown) {
+        const { root } = transformer.transform(markdown || '');
+        if (!mm) {
+          mm = Markmap.create(svg, {
+            autoFit: false,              // prevents “shudder”
+            pan: true,
+            scrollForPan: false,
+            duration: 180,
+            maxWidth: 320,               // forces wrapping => levels align better
+            nodeMinHeight: 18,
+            paddingX: 10,
+            spacingHorizontal: 110,
+            spacingVertical: 12,
+            initialExpandLevel: 2,        // OPENING VIEW: Level 1–2 only
+            embedGlobalCSS: true,
+          }, root);
+        } else {
+          mm.setData(root, {
+            initialExpandLevel: 2
+          });
+        }
+
+        // Fit once after render
+        setTimeout(() => mm && mm.fit(), 60);
+        setTimeout(() => decorateExpanders(), 90);
       }
 
-      function decorate(){
-        svg.querySelectorAll("g.markmap-node").forEach(g=>{
+      function isFolded(inode) {
+        return !!(inode && inode.payload && inode.payload.fold);
+      }
+
+      function hasChildren(inode) {
+        return !!(inode && inode.children && inode.children.length);
+      }
+
+      function decorateExpanders() {
+        if (!mm) return;
+
+        // Node groups are bound to INode objects on g.__data__
+        const nodeGs = svg.querySelectorAll('g');
+        nodeGs.forEach(g => {
           const inode = g.__data__;
-          if (!inode || !inode.data) return;
+          if (!inode || !inode.payload) return;
 
-          const d = inode.data;
-          const depth = typeof inode.depth === "number" ? inode.depth : 0;
+          // Mark leaf nodes so we can style them
+          if (!hasChildren(inode)) g.classList.add('vat-leaf'); else g.classList.remove('vat-leaf');
 
-          const pill = g.querySelector(".markmap-foreign");
-          if (!pill) return;
+          const fo = g.querySelector('foreignObject');
+          if (!fo) return;
 
-          pill.classList.remove("mm-depth-0","mm-depth-1","mm-depth-2","mm-depth-3","mm-depth-4","mm-depth-5","mm-depth-6");
-          pill.classList.add("mm-depth-" + Math.min(depth, 6));
+          const container =
+            fo.querySelector('.markmap-foreign') ||
+            fo.querySelector('div') ||
+            null;
 
-          let exp = pill.querySelector(".mm-expander");
-          if (!exp) {
-            exp = document.createElement("span");
-            exp.className = "mm-expander";
-            pill.prepend(exp);
-          }
+          if (!container) return;
 
-          const kids = hasChildren(d);
-          const folded = (d.payload && d.payload.fold === 1);
+          // Remove old expander if any
+          const existing = container.querySelector('.vat-expander');
+          if (existing) existing.remove();
 
-          if (!kids){
-            exp.classList.add("mm-disabled");
-            exp.textContent = "•";
-          } else {
-            exp.classList.remove("mm-disabled");
-            exp.textContent = folded ? "+" : "−";
-          }
+          if (!hasChildren(inode)) return;
 
-          if (pill.dataset.vatBound === "1") return;
-          pill.dataset.vatBound = "1";
+          // Add expander button (NotebookLM-style chevron)
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'vat-expander';
+          btn.setAttribute('aria-label', 'Expand/collapse');
+          btn.textContent = isFolded(inode) ? '›' : '‹';
 
-          exp.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); toggleFold(d); });
-          pill.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); toggleFold(d); });
+          // IMPORTANT: stop pan/zoom drag on click
+          btn.addEventListener('pointerdown', (e) => { e.stopPropagation(); }, { passive: false });
+
+          btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!mm) return;
+
+            try {
+              await mm.toggleNode(inode);
+              // Keep the clicked node in view
+              if (mm.ensureVisible) await mm.ensureVisible(inode, { top: 90, right: 40, bottom: 40, left: 40 });
+            } catch (_) { /* ignore */ }
+
+            // Redecorate after the DOM updates
+            requestAnimationFrame(() => decorateExpanders());
+          });
+
+          container.appendChild(btn);
         });
       }
 
-      async function renderMarkdown(md){
-        const clean = String(md || "").trim();
-        if (!clean) return;
-
-        const { root } = transformer.transform(clean);
-        setHeaderFrom(root && root.content ? root.content : "");
-
-        // OPEN AT LEVEL 2 ONLY + expand/collapse stepwise from there
-        applyInitialFolding(root, 0);
-        capMaxDepth(root, 0);
-
-        initialData = deepClone(root);
-
-        const opts = {
-          autoFit:false,
-          pan:true,
-          zoom:true,
-          scrollForPan:true,
-          duration:0,
-          spacingHorizontal: 240,
-          spacingVertical: 160,
-          paddingX: 18,
-          nodeMinHeight: 26,
-          maxWidth: 650,
-          color: () => "rgba(148,163,184,0.60)",
-          lineWidth: () => 1.2
-        };
-
-        if (!mm) {
-          mm = Markmap.create(svg, opts, root);
-
-          // Zoom buttons (multiplier)
-          document.getElementById("zoomIn").addEventListener("click", async ()=>{ try{ await mm.rescale(1.15); }catch(e){} });
-          document.getElementById("zoomOut").addEventListener("click", async ()=>{ try{ await mm.rescale(1/1.15); }catch(e){} });
-
-          document.getElementById("overview").addEventListener("click", async ()=>{ await fitClamped(1.05); });
-          document.getElementById("readable").addEventListener("click", async ()=>{ try{ await mm.rescale(1.25); }catch(e){} });
-
-          document.getElementById("reset").addEventListener("click", async ()=>{
-            mm.setData(deepClone(initialData));
-            setTimeout(async ()=>{ decorate(); await fitClamped(1.05); decorate(); }, 40);
-          });
-
-          document.getElementById("closeBtn").addEventListener("click", ()=>{
-            try { window.parent && window.parent.postMessage({ type:"VAT_CLOSE" }, "*"); } catch(e) {}
-          });
-
+      function applyReadableMode(on) {
+        readable = !!on;
+        document.documentElement.style.setProperty('--nodeBg', readable ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.10)');
+        // bump font sizes by toggling a class-like effect
+        const style = document.getElementById('vatReadableStyle');
+        if (readable) {
+          if (!style) {
+            const s = document.createElement('style');
+            s.id = 'vatReadableStyle';
+            s.textContent = `
+              .markmap-foreign > div, .markmap-foreign {
+                font-size: 16px !important;
+              }
+              #title { font-size: 30px; }
+            `;
+            document.head.appendChild(s);
+          }
         } else {
-          mm.setOptions(opts);
-          mm.setData(root);
+          if (style) style.remove();
         }
-
-        setTimeout(async ()=>{
-          decorate();
-          await fitClamped(1.05);
-          decorate();
-          try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_ACK" }, "*"); } catch(e) {}
-        }, 70);
+        if (mm) setTimeout(() => mm.fit(), 40);
       }
 
-      function extractMarkdown(data){
-        if (!data) return "";
-        if (typeof data === "string") return data;
-        if (typeof data === "object"){
-          if (typeof data.markdown === "string") return data.markdown;
-          if (typeof data.md === "string") return data.md;
-          if (typeof data.text === "string") return data.text;
-        }
-        return "";
-      }
+      // Toolbar actions
+      document.getElementById('zoomIn').addEventListener('click', () => setScale(getScale() * 1.15));
+      document.getElementById('zoomOut').addEventListener('click', () => setScale(getScale() / 1.15));
 
-      window.addEventListener("message", (event)=>{
-        const d = event.data || {};
-        if (d.type === "VAT_MINDMAP_MD" || d.type === "MARKDOWN" || d.type === "MD" || !d.type) {
-          const md = extractMarkdown(d);
-          if (md) renderMarkdown(md);
+      document.getElementById('overview').addEventListener('click', () => {
+        if (lastMsg && lastMsg.markdown) {
+          // Rebuild with initialExpandLevel=2
+          buildMap(lastMsg.markdown);
+        } else if (mm) {
+          mm.fit();
         }
       });
 
-      try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_READY" }, "*"); } catch(e) {}
+      document.getElementById('readable').addEventListener('click', () => applyReadableMode(!readable));
+
+      document.getElementById('reset').addEventListener('click', () => {
+        applyReadableMode(false);
+        if (lastMsg && lastMsg.markdown) buildMap(lastMsg.markdown);
+        else if (mm) mm.fit();
+      });
+
+      document.getElementById('close').addEventListener('click', () => {
+        window.parent && window.parent.postMessage({ type: 'VAT_CLOSE' }, '*');
+      });
+
+      // Messaging handshake
+      window.addEventListener('message', (ev) => {
+        const msg = ev.data || {};
+        if (msg.type !== 'VAT_SET') return;
+
+        lastMsg = msg;
+
+        // Header text (prevents “&amp;” issues because we use textContent)
+        if (typeof msg.title === 'string' && msg.title.trim()) titleEl.textContent = msg.title.trim();
+        if (typeof msg.sourcesCount === 'number') subEl.textContent = `Based on ${msg.sourcesCount} sources`;
+
+        buildMap(String(msg.markdown || ''));
+
+        // ack back to parent
+        window.parent && window.parent.postMessage({ type: 'VAT_READY_ACK' }, '*');
+      });
+
+      // Tell parent we're ready
+      window.parent && window.parent.postMessage({ type: 'VAT_READY' }, '*');
+
+      // ESC closes
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          window.parent && window.parent.postMessage({ type: 'VAT_CLOSE' }, '*');
+        }
+      });
     })();
   </script>
 </body>
