@@ -10,52 +10,43 @@
       --text:#fff;
       --muted: rgba(255,255,255,.75);
       --node:#3a3f46;
-      --nodeDeep:#1f4d34;
       --link: rgba(255,255,255,.22);
     }
-    html,body{
-      height:100%; margin:0; overflow:hidden;
-      background:var(--bg); color:var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    }
-    #svg{
-      width:100vw; height:100vh; display:block;
-      background: var(--bg);
-    }
+    html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;}
+    #svg{width:100vw;height:100vh;display:block;background:var(--bg);}
 
-    #header{ position:fixed; top:18px; left:18px; z-index:9999; pointer-events:none; }
-    #title{ font-size:34px; font-weight:900; margin:0; text-shadow:0 6px 20px rgba(0,0,0,.55); }
-    #subtitle{ margin-top:8px; font-size:14px; color:var(--muted); }
+    #header{position:fixed;top:18px;left:18px;z-index:9999;pointer-events:none;}
+    #title{font-size:34px;font-weight:900;margin:0;text-shadow:0 6px 20px rgba(0,0,0,.55);}
+    #subtitle{margin-top:8px;font-size:14px;color:var(--muted);}
 
-    #toolbar{ position:fixed; top:18px; right:18px; z-index:10000; display:flex; gap:10px; pointer-events:auto; }
+    #toolbar{position:fixed;top:18px;right:18px;z-index:10000;display:flex;gap:10px;pointer-events:auto;}
     .btn{
       background: rgba(17,24,39,.85);
       border: 1px solid rgba(255,255,255,.22);
-      color:#fff; height:40px; min-width:40px;
-      border-radius:10px; font-weight:800; cursor:pointer;
-      display:flex; align-items:center; justify-content:center;
-      box-shadow: 0 10px 24px rgba(0,0,0,.35);
-      user-select:none;
+      color:#fff;height:40px;min-width:40px;border-radius:10px;font-weight:800;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 10px 24px rgba(0,0,0,.35); user-select:none;
     }
-    .btn.text{ padding:0 14px; min-width:auto; font-size:13px; }
+    .btn.text{padding:0 14px;min-width:auto;font-size:13px;}
 
     #status{
-      position:fixed; left:16px; bottom:16px; z-index:9999;
+      position:fixed;left:16px;bottom:16px;z-index:9999;
       background: rgba(0,0,0,.35);
       border: 1px solid rgba(255,255,255,.12);
       padding: 10px 12px;
       border-radius: 10px;
       font-size: 13px;
       color: rgba(255,255,255,.82);
-      max-width: 70vw;
+      max-width: 75vw;
       pointer-events:none;
     }
 
-    /* Node boxes (LLM-like: compact + readable) */
+    /* LLM-like: compact but readable */
     .markmap-foreign{
       background: var(--node) !important;
       border-radius: 10px !important;
-      padding: 7px 12px !important;
+      padding: 6px 10px !important;
       color: #fff !important;
       font-size: 13px !important;
       font-weight: 700 !important;
@@ -82,7 +73,6 @@
   </div>
 
   <div id="status">Waiting for data…</div>
-
   <svg id="svg" class="markmap"></svg>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -104,15 +94,12 @@
     function getQS(name){
       try{
         const v = new URLSearchParams(location.search).get(name);
-        if (!v) return '';
-        // URLSearchParams is already decoded; DO NOT decodeURIComponent again.
-        return v;
+        return v || '';
       } catch(e){ return ''; }
     }
 
-    // If libraries failed to load, show it clearly
     if (!window.markmap || !window.markmap.Transformer || !window.markmap.Markmap){
-      status.textContent = "Viewer error: markmap libraries did not load (blocked or unavailable).";
+      status.textContent = "Viewer error: markmap libraries did not load.";
       window.parent && window.parent.postMessage({ type:'VAT_READY' }, '*');
       return;
     }
@@ -124,8 +111,70 @@
     let fullRoot = null;
     let fullDepth = 2;
 
-    let focusNode = null;     // <-- store MARKMAP NODE (not d3 hierarchy node)
-    let focusDepth = 4;
+    let focusNode = null;   // store MARKMAP node (d.data)
+    let focusDepth = 5;
+
+    // Current manual transform (we do NOT use mm.fit at all)
+    let curScale = 1, curTx = 0, curTy = 0;
+
+    function svgSize(){
+      return { w: svg.clientWidth || window.innerWidth, h: svg.clientHeight || window.innerHeight };
+    }
+
+    function pickGroup(){
+      // markmap-view creates groups; first <g> works reliably
+      return svg.querySelector('g') || null;
+    }
+
+    function applyTransform(){
+      const g = pickGroup();
+      if (!g) return false;
+      g.setAttribute('transform', `translate(${curTx},${curTy}) scale(${curScale})`);
+      return true;
+    }
+
+    function hardFitOnce(){
+      const g = pickGroup();
+      const { w, h } = svgSize();
+      if (!g || !w || !h) return false;
+
+      let bb;
+      try { bb = g.getBBox(); } catch(e) { return false; }
+      if (!bb || !isFinite(bb.width) || !isFinite(bb.height) || bb.width < 10 || bb.height < 10) return false;
+
+      const pad = 40;
+      const sx = (w - pad*2) / bb.width;
+      const sy = (h - pad*2) / bb.height;
+      const s = Math.max(0.05, Math.min(sx, sy)); // never zero/NaN
+
+      curScale = s;
+      curTx = (w - bb.width * s)/2 - bb.x * s;
+      curTy = (h - bb.height * s)/2 - bb.y * s;
+
+      return applyTransform();
+    }
+
+    function hardFitRetry(){
+      // retry until bbox exists (foreignObject needs a moment)
+      let tries = 0;
+      const timer = setInterval(() => {
+        tries++;
+        const ok = hardFitOnce();
+        if (ok || tries >= 35) clearInterval(timer);
+        if (tries === 35 && !ok) {
+          status.textContent = "Fit failed (bbox not ready). Try refresh (hard reload).";
+        }
+      }, 80);
+    }
+
+    function zoom(factor){
+      const { w, h } = svgSize();
+      const cx = w/2, cy = h/2;
+      curTx = cx - (cx - curTx) * factor;
+      curTy = cy - (cy - curTy) * factor;
+      curScale = Math.max(0.05, Math.min(curScale * factor, 6));
+      applyTransform();
+    }
 
     function clonePruned(node, maxDepth, depthNow){
       const out = { content: String(node && node.content ? node.content : ''), payload: node.payload || {} };
@@ -140,15 +189,6 @@
       return svg.querySelectorAll('g.markmap-node').length;
     }
 
-    function multiFit(){
-      if (!mm) return;
-      // Fit several times to avoid the "blank" race condition
-      const times = [0, 60, 140, 260, 420];
-      times.forEach(t => {
-        setTimeout(() => { try { mm.fit(); } catch(e){} }, t);
-      });
-    }
-
     function render(){
       if (!fullRoot) return;
 
@@ -158,18 +198,16 @@
 
       if (!mm){
         mm = Markmap.create(svg, {
-          autoFit: false,       // IMPORTANT: we control fit ourselves (more stable)
+          autoFit: false,
           duration: 0,
-          spacingHorizontal: 110,
-          spacingVertical: 22
+          spacingHorizontal: 95,
+          spacingVertical: 18
         }, rootToShow);
       } else {
         mm.setData(rootToShow);
       }
 
-      multiFit();
-
-      // Attach drill-down click handler (use d.data)
+      // attach drill handler (use d.data!)
       setTimeout(() => {
         try{
           const sel = d3.select(svg).selectAll('g.markmap-node');
@@ -183,7 +221,10 @@
             render();
           });
         } catch(e){}
-      }, 80);
+      }, 120);
+
+      // manual fit (with retries)
+      hardFitRetry();
 
       setTimeout(() => {
         const n = nodeCount();
@@ -193,7 +234,7 @@
         subline.textContent = focusNode
           ? `Expand level: ${focusDepth} (drilled — Resize to return)`
           : `Expand level: ${fullDepth} (click a node to drill down)`;
-      }, 220);
+      }, 450);
     }
 
     function setMarkdown(md){
@@ -236,14 +277,14 @@
       window.parent.postMessage({ type:'VAT_CLOSE' }, '*');
     }, true);
 
-    // Receive from parent (postMessage)
+    // Receive from parent
     window.addEventListener('message', (ev) => {
       if (!ev || !ev.data) return;
       if (ev.data.type !== 'VAT_SET') return;
       setMarkdown(ev.data.markdown || '');
     });
 
-    // Querystring fallback (md=...) – no double decoding
+    // Querystring fallback
     const mdFromQS = getQS('md');
     if (mdFromQS) setMarkdown(mdFromQS);
 
