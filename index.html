@@ -2,103 +2,161 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
+
+  <!-- Markmap -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.16.0/dist/browser/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.16.0/dist/index.min.js"></script>
+
   <style>
-    /* 1. NUCLEAR RESET: Block all transparency */
-    :root {
-      --bg: #0b0f14;
-      --box-bg: #1e293b; 
-      --text: #ffffff;
-      --accent: #3b82f6;
+    :root{
+      --vat-node-font: 18px;
+      --vat-node-bg: rgba(12, 18, 34, 0.92);
+      --vat-node-border: rgba(90, 140, 255, 0.95);
+      --vat-node-text: #ffffff;
+      --vat-link: rgba(170, 190, 255, 0.40);
+      --vat-dot: rgba(200, 220, 255, 0.65);
+      --vat-bg: #070b14;
     }
-    html, body { 
-      height: 100% !important; margin: 0 !important; 
-      background-color: var(--bg) !important; 
-      overflow: hidden !important; 
-      font-family: sans-serif !important; 
-    }
-    #svg { width: 100vw; height: 100vh; display: block; background-color: var(--bg) !important; }
+    html, body { height:100%; margin:0; background: var(--vat-bg); overflow:hidden; }
+    #wrap { position:fixed; inset:0; }
+    svg.markmap { width:100%; height:100%; }
 
-    /* 2. SIDEBAR & HEADER: Clear and solid */
-    #sidebar {
-      position: fixed; top: 0; left: 0; bottom: 0; width: 280px;
-      background: #0f172a !important; border-right: 2px solid var(--accent);
-      padding: 40px 20px; z-index: 9999; color: #fff; overflow-y: auto;
+    /* Make node labels readable (Markmap uses foreignObject HTML) */
+    .markmap-foreign, foreignObject > div {
+      font: 600 var(--vat-node-font)/1.15 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--vat-node-text) !important;
+      background: var(--vat-node-bg);
+      border: 1px solid var(--vat-node-border);
+      border-radius: 12px;
+      padding: 6px 10px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+      max-width: 360px;
+      white-space: normal;
     }
-    #header { position: fixed; top: 30px; left: 310px; z-index: 9999; pointer-events: none; }
-    #title { font-size: 32px; font-weight: 800; color: #fff !important; margin: 0; }
-    #subtitle { font-size: 16px; color: #94a3b8 !important; }
+    .markmap-foreign a, foreignObject > div a { color: var(--vat-node-text); text-decoration: none; }
 
-    /* 3. BUTTONS: Forced visibility and click capture */
-    #toolbar { position: fixed; top: 30px; right: 30px; z-index: 10000; display: flex; gap: 12px; }
-    .tb-btn { 
-      background: #334155 !important; border: 2px solid #fff !important; 
-      color: #fff !important; min-width: 50px; height: 50px; border-radius: 12px; 
-      cursor: pointer !important; font-weight: 800; font-size: 16px; display: flex; 
-      align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,0,0,0.8);
-    }
+    /* Links + dots */
+    .markmap-link { stroke: var(--vat-link) !important; }
+    circle { fill: var(--vat-dot) !important; }
 
-    /* 4. READABILITY: Solid, high-contrast text boxes */
-    .markmap-foreign {
-      background-color: #1e293b !important; 
-      border: 3px solid #3b82f6 !important;
-      border-radius: 10px !important;
-      padding: 12px 20px !important; 
-      color: #ffffff !important;
-      font-weight: 800 !important;
-      font-size: 18px !important; 
-      box-shadow: 0 12px 24px rgba(0,0,0,0.9) !important;
-      display: flex !important;
-      align-items: center !important;
-      white-space: nowrap !important;
+    /* Small status overlay (optional, but helpful) */
+    #status{
+      position:fixed; left:12px; bottom:12px;
+      color: rgba(255,255,255,.75);
+      font: 500 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 10px;
+      background: rgba(0,0,0,.25);
+      pointer-events:none;
+      user-select:none;
     }
-    .markmap-foreign div { color: #ffffff !important; background: transparent !important; }
-    .markmap-link { stroke: #475569 !important; stroke-width: 3px !important; }
   </style>
 </head>
+
 <body>
-  <div id="sidebar">
-    <h3 style="border-bottom: 2px solid #3b82f6; padding-bottom:10px;">Verified Sources</h3>
-    <p><strong>VAT Notice 701/15:</strong><br>Animals and animal food</p>
-    <p><strong>VFOOD3020:</strong><br>Animal feeding stuffs</p>
-    <p><strong>VFOOD3100:</strong><br>Categories of animal foodstuffs</p>
-    <p><strong>VFOOD3620:</strong><br>Live animals</p>
-    <p><strong>VFOOD8520:</strong><br>Pet food and wild bird food</p>
+  <div id="wrap">
+    <svg id="mm" class="markmap"></svg>
+    <div id="status">Ready</div>
   </div>
-  <div id="header"><div id="title">Taxonomy: Animals, Food, and Catering</div></div>
-  <div id="toolbar">
-    <button class="tb-btn" id="zin">+</button>
-    <button class="tb-btn" id="zout">−</button>
-    <button class="tb-btn" style="width:auto; padding:0 15px;" id="res">Resize</button>
-    <button class="tb-btn" style="width:auto; padding:0 15px;" id="cls">Close</button>
-  </div>
-  <svg id="svg" class="markmap"></svg>
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
+
   <script>
-    (function () {
-      const { Transformer, Markmap } = window.markmap;
-      const svg = document.querySelector('#svg');
-      let mm = null;
-      const trans = new Transformer();
-      window.addEventListener('message', (ev) => {
-        if (ev.data.type !== 'VAT_SET') return;
-        const { root } = trans.transform(ev.data.markdown || '');
-        if (!mm) { mm = Markmap.create(svg, { autoFit: true, spacingVertical: 80, spacingHorizontal: 180 }, root);
-        } else { mm.setData(root); mm.fit(); }
+    (function(){
+      const statusEl = document.getElementById('status');
+      const svg = document.getElementById('mm');
+
+      const transformer = new markmap.Transformer();
+      const mm = markmap.Markmap.create(svg, { duration: 200 }, { content: 'VAT Mindmap' });
+
+      let lastMarkdown = '# VAT Mindmap\\n\\n(Waiting for content…)';
+      let currentDepth = 2;
+      let maxDepth = 2;
+
+      function setStatus(t){ statusEl.textContent = t; }
+
+      function computeMaxDepth(node, d=0){
+        if (!node) return d;
+        let m = d;
+        const kids = node.children || [];
+        for (const c of kids) m = Math.max(m, computeMaxDepth(c, d+1));
+        return m;
+      }
+
+      // Show levels 0..depth, by folding nodes at that depth
+      function applyFoldToDepth(node, d, depth){
+        node.payload = node.payload || {};
+        if (d >= depth) {
+          node.payload.fold = 1; // collapse children
+        } else {
+          node.payload.fold = 0; // expand
+          const kids = node.children || [];
+          for (const c of kids) applyFoldToDepth(c, d+1, depth);
+        }
+      }
+
+      function render(markdown, depth){
+        const md = String(markdown || '').trim() || '# VAT Mindmap\\n\\n(No content)';
+        lastMarkdown = md;
+
+        const { root } = transformer.transform(md);
+        maxDepth = computeMaxDepth(root, 0);
+
+        const target = Math.max(1, Math.min(depth || currentDepth, maxDepth));
+        currentDepth = target;
+
+        applyFoldToDepth(root, 0, target);
+        mm.setData(root);
+        mm.fit();
+        setStatus(`Depth ${currentDepth}/${maxDepth}`);
+      }
+
+      // PostMessage protocol
+      function isValidMsg(x){
+        return x && typeof x === 'object' && x.channel === 'vat-mindmap';
+      }
+
+      window.addEventListener('message', (event) => {
+        const msg = event.data;
+        if (!isValidMsg(msg)) return;
+
+        try{
+          if (msg.type === 'setMarkdown') {
+            render(msg.markdown, currentDepth);
+          }
+          if (msg.type === 'collapseTo') {
+            render(lastMarkdown, Number(msg.depth || 2));
+          }
+          if (msg.type === 'expandOne') {
+            render(lastMarkdown, currentDepth + 1);
+          }
+          if (msg.type === 'collapseOne') {
+            render(lastMarkdown, currentDepth - 1);
+          }
+          if (msg.type === 'fit') {
+            mm.fit();
+          }
+          if (msg.type === 'setFontScale') {
+            const scale = Math.max(0.85, Math.min(1.6, Number(msg.scale || 1)));
+            const base = 18;
+            document.documentElement.style.setProperty('--vat-node-font', (base * scale).toFixed(0) + 'px');
+            setStatus(`Text x${scale.toFixed(2)} | Depth ${currentDepth}/${maxDepth}`);
+            mm.fit();
+          }
+        }catch(e){
+          setStatus('Error: ' + (e && e.message ? e.message : 'render failed'));
+        }
       });
-      const setupBtn = (id, fn) => {
-        document.getElementById(id).addEventListener('click', (e) => {
-          e.preventDefault(); e.stopPropagation(); fn();
-        }, true);
-      };
-      setupBtn('zin', () => mm.rescale(1.3));
-      setupBtn('zout', () => mm.rescale(0.7));
-      setupBtn('res', () => mm.fit());
-      setupBtn('cls', () => window.parent.postMessage({type:'VAT_CLOSE'}, '*'));
-      window.parent.postMessage({ type: 'VAT_READY' }, '*');
+
+      // Initial render (so the page is never blank)
+      render(lastMarkdown, currentDepth);
+
+      // Tell parent we're ready
+      try{
+        window.parent && window.parent.postMessage({ channel:'vat-mindmap', type:'ready' }, '*');
+      }catch(_){}
     })();
   </script>
 </body>
