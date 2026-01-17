@@ -7,7 +7,7 @@
   <style>
     :root {
       --bg: #0b0f14;
-      --box-bg: #1e293b; /* Dark, solid slate */
+      --box-bg: #1e293b; /* Solid dark slate for text boxes */
       --text: #ffffff;
       --accent: #3b82f6;
     }
@@ -19,7 +19,7 @@
     }
     #svg { width: 100vw; height: 100vh; display: block; background-color: var(--bg); }
 
-    /* Header & Buttons - Extreme Z-Index to block background clicks */
+    /* Header & Buttons - Fixed Z-Index to block background clicks */
     #header { position: fixed; top: 30px; left: 300px; z-index: 99999; pointer-events: none; }
     #title { font-size: 32px; font-weight: 800; color: #fff; margin: 0; text-shadow: 0 4px 12px rgba(0,0,0,0.9); }
     #subtitle { font-size: 16px; color: #94a3b8; margin-top: 5px; }
@@ -28,16 +28,15 @@
     .tb-btn { 
       background: #334155 !important; border: 2px solid #64748b !important; 
       color: #fff !important; min-width: 50px; height: 50px; border-radius: 12px; 
-      cursor: pointer; font-weight: 800; font-size: 22px; display: flex; 
+      cursor: pointer; font-weight: 800; font-size: 16px; display: flex; 
       align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,0,0,0.6);
     }
-    .tb-btn.txt { font-size: 15px; width: auto; padding: 0 20px; }
     .tb-btn:hover { background: #475569 !important; border-color: #fff !important; }
 
-    /* Verified Sources Sidebar */
+    /* Sidebar for Verified Sources */
     #sidebar {
       position: fixed; top: 0; left: 0; bottom: 0; width: 260px;
-      background: rgba(15, 23, 42, 0.95); border-right: 1px solid rgba(255,255,255,0.1);
+      background: #0f172a; border-right: 1px solid rgba(255,255,255,0.1);
       padding: 40px 20px; z-index: 99998; color: #fff; overflow-y: auto;
     }
     #sidebar h3 { font-size: 18px; font-weight: 800; margin-bottom: 25px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
@@ -55,8 +54,10 @@
       font-size: 17px !important; 
       box-shadow: 0 12px 24px rgba(0,0,0,0.8) !important;
       white-space: nowrap !important;
+      display: flex !important;
+      align-items: center !important;
     }
-    .markmap-foreign div { color: #ffffff !important; }
+    .markmap-foreign div { color: #ffffff !important; background: transparent !important; }
     .markmap-link { stroke: #475569 !important; stroke-width: 3px !important; }
   </style>
 </head>
@@ -78,8 +79,8 @@
   <div id="toolbar">
     <button class="tb-btn" id="zin">+</button>
     <button class="tb-btn" id="zout">−</button>
-    <button class="tb-btn txt" id="res">Resize</button>
-    <button class="tb-btn txt" id="cls">Close</button>
+    <button class="tb-btn" id="res">Resize</button>
+    <button class="tb-btn" id="cls">Close</button>
   </div>
   <svg id="svg" class="markmap"></svg>
 
@@ -100,7 +101,7 @@
         if (!mm) {
           mm = Markmap.create(svg, {
             autoFit: true,
-            spacingVertical: 70,
+            spacingVertical: 80,
             spacingHorizontal: 180,
           }, root);
         } else {
