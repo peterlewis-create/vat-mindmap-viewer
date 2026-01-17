@@ -7,9 +7,8 @@
   <style>
     :root {
       --bg0: #0b0f14;
+      --panel: rgba(15, 23, 36, 0.9);
       --text: #ffffff;
-      --nodeBg: rgba(255, 255, 255, 0.08);
-      --nodeBorder: rgba(255, 255, 255, 0.2);
     }
 
     html, body {
@@ -17,63 +16,52 @@
       margin: 0;
       background: var(--bg0);
       overflow: hidden;
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: sans-serif;
+      color: var(--text);
     }
 
-    #svg {
-      width: 100vw;
-      height: 100vh;
-      display: block;
-    }
+    #svg { width: 100vw; height: 100vh; display: block; }
 
-    /* FIX 1: Text Readability */
-    .markmap-foreign {
-      background: var(--nodeBg);
-      border: 1px solid var(--nodeBorder);
-      border-radius: 8px;
-      padding: 8px 12px;
-      color: var(--text) !important;
-      font-size: 14px !important;
-      font-weight: 600 !important;
-      white-space: nowrap; /* Prevents text from bunching up */
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-
-    .markmap-foreign div {
-      color: white !important; /* Forces white text */
-    }
-
-    /* Link curves color */
-    .markmap-link {
-      stroke: rgba(255, 255, 255, 0.15) !important;
-      stroke-width: 2px !important;
-    }
-
-    /* Toolbar styling */
-    #toolbar {
+    /* Header Styling */
+    #header {
       position: fixed;
-      top: 20px;
-      right: 20px;
+      top: 25px;
+      left: 25px;
       z-index: 100;
-      display: flex;
-      gap: 8px;
+      pointer-events: none;
+    }
+    #title { font-size: 26px; font-weight: 800; margin: 0; color: #fff; }
+    #subtitle { font-size: 14px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+
+    /* Node Readability & Vertical Spacing */
+    .markmap-foreign {
+      background: rgba(255, 255, 255, 0.15) !important;
+      border: 1px solid rgba(255, 255, 255, 0.3) !important;
+      border-radius: 12px !important;
+      padding: 10px 16px !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      font-size: 15px !important;
+      /* Prevent skinny nodes */
+      min-width: 120px;
+      text-align: center;
     }
 
-    .tb-btn {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.2);
-      color: white;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
+    .markmap-foreign div { color: #ffffff !important; }
+
+    /* Line (Link) Thickness */
+    .markmap-link {
+      stroke: rgba(255,255,255,0.2) !important;
+      stroke-width: 2.5px !important;
     }
   </style>
 </head>
 <body>
-  <div id="toolbar">
-    <button class="tb-btn" id="fit">Center View</button>
+  <div id="header">
+    <h1 id="title"></h1>
+    <p id="subtitle"></p>
   </div>
+
   <svg id="svg" class="markmap"></svg>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -84,6 +72,8 @@
     (function () {
       const { Transformer, Markmap } = window.markmap;
       const svg = document.querySelector('#svg');
+      const titleEl = document.querySelector('#title');
+      const subEl = document.querySelector('#subtitle');
       let mm = null;
       const transformer = new Transformer();
 
@@ -91,15 +81,19 @@
         const msg = ev.data;
         if (msg.type !== 'VAT_SET') return;
 
+        // Set Headers
+        titleEl.textContent = msg.title || "";
+        subEl.textContent = `Based on ${msg.sourcesCount || 0} sources`;
+
         const { root } = transformer.transform(msg.markdown || '');
 
         if (!mm) {
           mm = Markmap.create(svg, {
             autoFit: true,
-            duration: 500,
-            /* FIX 2: Branch Width/Spacing */
-            spacingHorizontal: 150, // Increases distance between levels
-            spacingVertical: 15,    // Increases distance between siblings
+            duration: 400,
+            /* INCREASED VERTICAL SPACING HERE */
+            spacingVertical: 40,   
+            spacingHorizontal: 160,
             paddingX: 20,
           }, root);
         } else {
@@ -108,7 +102,6 @@
         }
       });
 
-      document.getElementById('fit').addEventListener('click', () => mm && mm.fit());
       window.parent.postMessage({ type: 'VAT_READY' }, '*');
     })();
   </script>
