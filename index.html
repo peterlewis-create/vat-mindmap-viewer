@@ -4,78 +4,177 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
+
   <style>
     :root{
-      --bg:#2f3136;
-      --text:#fff;
-      --muted: rgba(255,255,255,.78);
-      --node:#3a3f46;
-      --link: rgba(255,255,255,.22);
+      --bg:#323437;        /* LLM-like charcoal */
+      --text:#ffffff;
+      --muted:rgba(255,255,255,.75);
+
+      --nodeGrey:#3f4956;  /* level 0–2 */
+      --nodeGreen:#1f4a35; /* deeper levels */
+      --nodeBorder:rgba(255,255,255,.10);
+
+      --link:rgba(140,155,170,.35);
+      --accent:#79a8ff;
     }
+
     html,body{
-      height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      overflow:hidden;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color:var(--text);
     }
-    #svg{width:100vw;height:100vh;display:block;background:var(--bg);}
 
-    #header{position:fixed;top:18px;left:18px;z-index:9999;pointer-events:none;}
-    #title{font-size:34px;font-weight:900;margin:0;text-shadow:0 6px 20px rgba(0,0,0,.55);}
-    #subtitle{margin-top:8px;font-size:14px;color:var(--muted);}
-
-    #toolbar{position:fixed;top:18px;right:18px;z-index:10000;display:flex;gap:10px;pointer-events:auto;}
-    .btn{
-      background: rgba(17,24,39,.85);
-      border: 1px solid rgba(255,255,255,.22);
-      color:#fff;height:40px;min-width:40px;border-radius:10px;font-weight:800;cursor:pointer;
-      display:flex;align-items:center;justify-content:center;
-      box-shadow:0 10px 24px rgba(0,0,0,.35);
-      user-select:none;
+    #svg{
+      width:100vw;
+      height:100vh;
+      display:block;
+      background:var(--bg);
     }
-    .btn.text{padding:0 14px;min-width:auto;font-size:13px;}
 
-    #status{
-      position:fixed;left:16px;bottom:16px;z-index:9999;
-      background: rgba(0,0,0,.35);
-      border: 1px solid rgba(255,255,255,.12);
-      padding: 10px 12px;
-      border-radius: 10px;
-      font-size: 13px;
-      color: rgba(255,255,255,.86);
-      max-width: 78vw;
+    /* Header */
+    #header{
+      position:fixed;
+      top:18px;
+      left:18px;
+      z-index:50;
       pointer-events:none;
     }
-
-    /* Compact, LLM-like */
-    .markmap-foreign{
-      background: var(--node) !important;
-      border-radius: 10px !important;
-      padding: 6px 10px !important;
-      color: #fff !important;
-      font-size: 13px !important;
-      font-weight: 700 !important;
-      line-height: 1.15 !important;
-      box-shadow: 0 10px 22px rgba(0,0,0,.35) !important;
-      border: 1px solid rgba(255,255,255,.10) !important;
-      white-space: nowrap !important;
+    #title{
+      font-size:34px;
+      font-weight:900;
+      margin:0;
+      line-height:1.05;
     }
-    .markmap-foreign div{ color:#fff !important; white-space:nowrap !important; }
-    .markmap-link{ stroke: var(--link) !important; stroke-width: 2px !important; }
+    #subtitle{
+      margin-top:6px;
+      font-size:13px;
+      color:var(--muted);
+      font-weight:700;
+    }
+
+    /* Toolbar */
+    #toolbar{
+      position:fixed;
+      top:18px;
+      right:18px;
+      z-index:60;
+      display:flex;
+      gap:10px;
+      pointer-events:auto;
+    }
+    .tb-btn{
+      background:rgba(0,0,0,.25);
+      border:1px solid rgba(255,255,255,.25);
+      color:#fff;
+      height:40px;
+      min-width:40px;
+      border-radius:10px;
+      font-weight:900;
+      cursor:pointer;
+      user-select:none;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:0 10px;
+    }
+    .tb-btn.text{ min-width:auto; font-size:13px; }
+    .tb-btn:hover{ border-color:rgba(255,255,255,.55); }
+
+    /* Markmap styling – compact, readable, LLM-like */
+    .markmap-link{
+      stroke:var(--link) !important;
+      stroke-width:2.2px !important;
+    }
+
+    /* The HTML label container created by markmap */
+    .markmap-foreign{
+      border-radius:8px !important;
+      padding:7px 10px !important;      /* compact */
+      font-size:14px !important;         /* readable */
+      font-weight:800 !important;
+      line-height:1.25 !important;
+      color:#fff !important;
+      border:1px solid var(--nodeBorder) !important;
+      box-shadow:none !important;
+
+      /* IMPORTANT: prevent clipping bugs */
+      white-space:nowrap !important;
+      max-width:420px !important;
+      overflow:visible !important;
+    }
+
+    /* Depth-based background (match LLM feel) */
+    g.markmap-node[data-depth="0"] .markmap-foreign,
+    g.markmap-node[data-depth="1"] .markmap-foreign,
+    g.markmap-node[data-depth="2"] .markmap-foreign{
+      background:var(--nodeGrey) !important;
+    }
+    g.markmap-node[data-depth="3"] .markmap-foreign,
+    g.markmap-node[data-depth="4"] .markmap-foreign,
+    g.markmap-node[data-depth="5"] .markmap-foreign,
+    g.markmap-node[data-depth="6"] .markmap-foreign,
+    g.markmap-node[data-depth="7"] .markmap-foreign,
+    g.markmap-node[data-depth="8"] .markmap-foreign{
+      background:var(--nodeGreen) !important;
+    }
+
+    /* Little chevron like the LLM nodes */
+    .mm-row{ display:flex; align-items:center; gap:10px; }
+    .mm-text{ display:inline-block; }
+    .mm-chev{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:18px;
+      height:18px;
+      border-radius:6px;
+      background:rgba(255,255,255,.10);
+      color:rgba(255,255,255,.80);
+      font-size:13px;
+      font-weight:900;
+      margin-left:2px;
+    }
+
+    /* Hide the coloured node dots (LLM look has no dots) */
+    .markmap-node circle{ opacity:0.0 !important; }
+
+    /* Status */
+    #status{
+      position:fixed;
+      left:18px;
+      bottom:18px;
+      z-index:70;
+      background:rgba(0,0,0,.25);
+      border:1px solid rgba(255,255,255,.18);
+      padding:7px 10px;
+      border-radius:10px;
+      font-size:12px;
+      font-weight:700;
+      color:rgba(255,255,255,.85);
+      pointer-events:none;
+      max-width:60vw;
+    }
   </style>
 </head>
+
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle" id="subline">Expand level: 2 (click a node to drill down)</div>
+    <div id="subtitle">Expand level: <span id="lvl">2</span> (click a node to magnify)</div>
   </div>
 
   <div id="toolbar">
-    <button class="btn" id="minus">−</button>
-    <button class="btn" id="plus">+</button>
-    <button class="btn text" id="resize">Resize</button>
-    <button class="btn text" id="close">Close</button>
+    <button class="tb-btn" id="plus" title="Show one more level">+</button>
+    <button class="tb-btn" id="minus" title="Show one fewer level">−</button>
+    <button class="tb-btn text" id="resize" title="Back to level 2">Resize</button>
+    <button class="tb-btn text" id="close" title="Close">Close</button>
   </div>
 
-  <div id="status">Waiting for data…</div>
+  <div id="status">Waiting for mindmap data…</div>
   <svg id="svg" class="markmap"></svg>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -83,251 +182,157 @@
   <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
 
   <script>
-  (function(){
-    const status = document.getElementById('status');
-    const subline = document.getElementById('subline');
-    const svg = document.getElementById('svg');
+    (function(){
+      const { Transformer, Markmap } = window.markmap;
+      const svg = document.getElementById('svg');
+      const lvlEl = document.getElementById('lvl');
+      const statusEl = document.getElementById('status');
 
-    function stop(e){
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-    }
+      const transformer = new Transformer();
+      let baseRoot = null;
+      let expandLevel = 2;
+      let mm = null;
 
-    function svgSize(){
-      return { w: svg.clientWidth || window.innerWidth, h: svg.clientHeight || window.innerHeight };
-    }
+      function setStatus(s){ statusEl.textContent = s; }
+      function setLvl(){ lvlEl.textContent = String(expandLevel); }
 
-    function qs(name){
-      try { return (new URLSearchParams(location.search).get(name) || ''); }
-      catch(e){ return ''; }
-    }
-
-    if (!window.markmap || !window.markmap.Transformer || !window.markmap.Markmap){
-      status.textContent = "Viewer error: markmap libraries did not load.";
-      window.parent && window.parent.postMessage({ type:'VAT_READY' }, '*');
-      return;
-    }
-
-    const { Transformer, Markmap } = window.markmap;
-    const transformer = new Transformer();
-    let mm = null;
-
-    let fullRoot = null;
-    let fullDepth = 2;
-
-    let focusNode = null;   // store markmap node (d.data)
-    let focusDepth = 5;
-
-    // Manual transform
-    let curScale = 1, curTx = 0, curTy = 0;
-
-    function applyTransform(){
-      const g = pickRootGroup();
-      if (!g) return false;
-      g.setAttribute('transform', `translate(${curTx},${curTy}) scale(${curScale})`);
-      return true;
-    }
-
-    // CRITICAL FIX: pick the group that actually contains the markmap nodes
-    function pickRootGroup(){
-      // Prefer known class if present
-      const gMark = svg.querySelector('g.markmap');
-      if (gMark) return gMark;
-
-      // Find any node/link and walk up to the topmost <g> under the svg
-      const any = svg.querySelector('g.markmap-node, path.markmap-link, circle');
-      if (!any) return svg.querySelector('g');
-
-      let g = any;
-      // climb to a <g>
-      while (g && g.tagName && g.tagName.toLowerCase() !== 'g') g = g.parentNode;
-      if (!g) return svg.querySelector('g');
-
-      // climb to the highest <g> whose parent is still a <g>
-      while (g.parentNode && g.parentNode.tagName && g.parentNode.tagName.toLowerCase() === 'g') {
-        g = g.parentNode;
+      function clearSvg(){
+        while(svg.firstChild) svg.removeChild(svg.firstChild);
       }
-      return g;
-    }
 
-    function unionBBox(elements){
-      let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
-      for (const el of elements){
-        let bb;
-        try { bb = el.getBBox(); } catch(e){ continue; }
-        if (!bb || !isFinite(bb.x) || !isFinite(bb.y) || !isFinite(bb.width) || !isFinite(bb.height)) continue;
-        if (bb.width <= 0 || bb.height <= 0) continue;
-        x1 = Math.min(x1, bb.x);
-        y1 = Math.min(y1, bb.y);
-        x2 = Math.max(x2, bb.x + bb.width);
-        y2 = Math.max(y2, bb.y + bb.height);
+      function decorateNodes(){
+        if (!mm || !mm.g) return;
+
+        mm.g.selectAll('g.markmap-node')
+          .attr('data-depth', d => d.depth);
+
+        // Add chevrons to nodes that have children
+        mm.g.selectAll('g.markmap-node').each(function(d){
+          const g = d3.select(this);
+          const div = g.select('foreignObject > div');
+          if (div.empty()) return;
+
+          // Only wrap once
+          if (div.select('.mm-row').size()) return;
+
+          const text = div.text();
+          div.html('');
+          const row = div.append('div').attr('class','mm-row');
+          row.append('span').attr('class','mm-text').text(text);
+
+          if (d.children && d.children.length){
+            row.append('span').attr('class','mm-chev').text('>');
+          }
+        });
+
+        // Click-to-magnify behaviour (LLM feel: focus on branch)
+        mm.g.selectAll('g.markmap-node')
+          .on('click.vat', async (event, d) => {
+            try{
+              event.preventDefault();
+              event.stopPropagation();
+
+              // Expand/collapse the clicked node (if it has children)
+              if (d && d.children && d.children.length){
+                await mm.toggleNode(d);
+              }
+
+              // Focus (move rest off screen)
+              mm.fit();
+              await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
+
+              // Mild zoom (NOT massive)
+              await mm.rescale(1.25);
+
+              setStatus('Magnified selected branch. Use Resize to return to the full level-2 view.');
+            } catch(e){
+              setStatus('Viewer error: ' + (e && e.message ? e.message : String(e)));
+            }
+          });
       }
-      if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return null;
-      const w = x2 - x1, h = y2 - y1;
-      if (w < 10 || h < 10) return null;
-      return { x: x1, y: y1, width: w, height: h };
-    }
 
-    function hardFitOnce(){
-      const { w, h } = svgSize();
-      if (!w || !h) return false;
+      // IMPORTANT: recreate the map whenever expand level changes
+      // (this is why your current build can’t reach level 3 reliably)
+      function render(){
+        if (!baseRoot) return;
 
-      const g = pickRootGroup();
-      if (!g) return false;
+        clearSvg();
+        mm = null;
 
-      // First try bbox of the root group
-      let bb = null;
-      try { bb = g.getBBox(); } catch(e){ bb = null; }
-      if (!bb || !isFinite(bb.width) || !isFinite(bb.height) || bb.width < 10 || bb.height < 10){
-        // Fallback: union bbox over actual nodes/links
-        const els = Array.from(svg.querySelectorAll('g.markmap-node, path.markmap-link, circle'));
-        bb = unionBBox(els);
+        const options = {
+          autoFit: true,
+          initialExpandLevel: expandLevel,
+
+          // LLM-like geometry: steeper vertical, tighter horizontal
+          spacingVertical: 95,
+          spacingHorizontal: 115,
+
+          paddingX: 16
+        };
+
+        mm = Markmap.create(svg, options, JSON.parse(JSON.stringify(baseRoot)));
+        mm.fit();
+        decorateNodes();
+        setLvl();
       }
-      if (!bb) return false;
 
-      const pad = 40;
-      const sx = (w - pad*2) / bb.width;
-      const sy = (h - pad*2) / bb.height;
-      const s = Math.max(0.05, Math.min(sx, sy));
+      function setExpand(n){
+        expandLevel = Math.max(1, Math.min(8, n));
+        render();
+        setStatus('Expand level set to ' + expandLevel + '.');
+      }
 
-      curScale = s;
-      curTx = (w - bb.width * s)/2 - bb.x * s;
-      curTy = (h - bb.height * s)/2 - bb.y * s;
-      return applyTransform();
-    }
+      document.getElementById('plus').addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        setExpand(expandLevel + 1);
+      }, true);
 
-    function hardFitRetry(){
-      let tries = 0;
-      const timer = setInterval(() => {
-        tries++;
-        const ok = hardFitOnce();
-        if (ok){
-          clearInterval(timer);
+      document.getElementById('minus').addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        setExpand(expandLevel - 1);
+      }, true);
+
+      document.getElementById('resize').addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        setExpand(2);
+        if (mm) mm.fit();
+        setStatus('Reset to expand level 2.');
+      }, true);
+
+      document.getElementById('close').addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        window.parent.postMessage({ type:'VAT_CLOSE' }, '*');
+      }, true);
+
+      // Receive markdown
+      window.addEventListener('message', (ev)=>{
+        if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
+
+        const md = String(ev.data.markdown || '').trim();
+        if (!md){
+          setStatus('No markdown received.');
           return;
         }
-        if (tries >= 45){
-          clearInterval(timer);
-          const nodes = svg.querySelectorAll('g.markmap-node').length;
-          status.textContent = `Fit failed. Nodes found: ${nodes}. (This usually means we were fitting the wrong SVG group — now fixed — but the SVG still has no measurable bbox.)`;
+
+        const out = transformer.transform(md);
+        if (!out || !out.root){
+          setStatus('Could not parse markdown.');
+          return;
         }
-      }, 90);
-    }
 
-    function clonePruned(node, maxDepth, depthNow){
-      const out = { content: String(node && node.content ? node.content : ''), payload: node.payload || {} };
-      const kids = Array.isArray(node && node.children) ? node.children : [];
-      if (depthNow < maxDepth && kids.length){
-        out.children = kids.map(ch => clonePruned(ch, maxDepth, depthNow + 1));
-      }
-      return out;
-    }
+        baseRoot = out.root;
+        setStatus('Data received. Rendering…');
+        setExpand(2);
+        setStatus('Ready. Expand level 2. Click a node to magnify. Use + to reach level 3/4.');
+      });
 
-    function nodeCount(){
-      return svg.querySelectorAll('g.markmap-node').length;
-    }
+      // Ready handshake
+      window.parent.postMessage({ type:'VAT_READY' }, '*');
 
-    function render(){
-      if (!fullRoot) return;
-
-      const rootToShow = focusNode
-        ? clonePruned(focusNode, focusDepth, 1)
-        : clonePruned(fullRoot, fullDepth, 1);
-
-      if (!mm){
-        mm = Markmap.create(svg, {
-          autoFit: false,
-          duration: 0,
-          spacingHorizontal: 90,  // compact like the LLM layout
-          spacingVertical: 16
-        }, rootToShow);
-      } else {
-        mm.setData(rootToShow);
-      }
-
-      // attach drill handler (use d.data!)
-      setTimeout(() => {
-        try{
-          const sel = d3.select(svg).selectAll('g.markmap-node');
-          sel.on('click', (event, d) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const markmapNode = d && d.data ? d.data : null;
-            if (!markmapNode) return;
-            focusNode = markmapNode;
-            focusDepth = Math.max(4, fullDepth + 2);
-            render();
-          });
-        } catch(e){}
-      }, 120);
-
-      hardFitRetry();
-
-      setTimeout(() => {
-        const n = nodeCount();
-        status.textContent = focusNode
-          ? `Drilled branch (level ${focusDepth}). Nodes: ${n}. Use Resize to return.`
-          : `Overview (level ${fullDepth}). Nodes: ${n}. Click a node to drill down.`;
-        subline.textContent = focusNode
-          ? `Expand level: ${focusDepth} (drilled — Resize to return)`
-          : `Expand level: ${fullDepth} (click a node to drill down)`;
-      }, 500);
-    }
-
-    function setMarkdown(md){
-      const cleaned = String(md || '').trim();
-      if (!cleaned){
-        status.textContent = "No markdown received.";
-        return;
-      }
-      const { root } = transformer.transform(cleaned);
-      fullRoot = root;
-      focusNode = null;
-      fullDepth = 2;
-      render();
-    }
-
-    // Toolbar
-    document.getElementById('plus').addEventListener('click', (e) => {
-      stop(e);
-      if (focusNode) focusDepth = Math.min(8, focusDepth + 1);
-      else fullDepth = Math.min(4, fullDepth + 1);
-      render();
-    }, true);
-
-    document.getElementById('minus').addEventListener('click', (e) => {
-      stop(e);
-      if (focusNode) focusDepth = Math.max(3, focusDepth - 1);
-      else fullDepth = Math.max(1, fullDepth - 1);
-      render();
-    }, true);
-
-    document.getElementById('resize').addEventListener('click', (e) => {
-      stop(e);
-      focusNode = null;
-      fullDepth = 2;
-      render();
-    }, true);
-
-    document.getElementById('close').addEventListener('click', (e) => {
-      stop(e);
-      window.parent.postMessage({ type:'VAT_CLOSE' }, '*');
-    }, true);
-
-    // Receive from parent
-    window.addEventListener('message', (ev) => {
-      if (!ev || !ev.data) return;
-      if (ev.data.type !== 'VAT_SET') return;
-      setMarkdown(ev.data.markdown || '');
-    });
-
-    // Querystring fallback
-    const mdFromQS = qs('md');
-    if (mdFromQS) setMarkdown(mdFromQS);
-
-    // Handshake
-    window.parent.postMessage({ type:'VAT_READY' }, '*');
-  })();
+      setTimeout(()=>{
+        if (!baseRoot) setStatus('Waiting for data from the parent page…');
+      }, 600);
+    })();
   </script>
 </body>
 </html>
