@@ -5,57 +5,52 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
   <style>
+    /* FORCE SOLID COLORS */
     :root {
       --bg: #0b0f14;
-      --node-bg: #1a222d; /* Solid dark background for boxes */
+      --box-bg: #161e27; 
       --text: #ffffff;
-      --accent: #3b82f6;
+      --border: #3b82f6;
     }
     html, body { 
-      height: 100%; margin: 0; background: var(--bg); 
-      overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-      color: var(--text); 
+      height: 100% !important; margin: 0 !important; 
+      background-color: var(--bg) !important; 
+      overflow: hidden !important; 
+      font-family: sans-serif !important; 
     }
-    #svg { width: 100vw; height: 100vh; display: block; }
+    #svg { width: 100vw; height: 100vh; display: block; background-color: var(--bg); }
 
-    /* Header & Toolbar - High Z-Index for click priority */
-    #header { position: fixed; top: 30px; left: 30px; z-index: 2000; pointer-events: none; }
-    #title { font-size: 32px; font-weight: 800; margin: 0; color: #fff; letter-spacing: -0.5px; }
-    #subtitle { font-size: 16px; color: rgba(255,255,255,0.7); margin-top: 8px; }
+    /* HEADER & BUTTONS */
+    #header { position: fixed; top: 30px; left: 30px; z-index: 9999; pointer-events: none; }
+    #title { font-size: 32px; font-weight: 800; color: #fff; margin: 0; }
+    #subtitle { font-size: 16px; color: #94a3b8; margin-top: 5px; }
     
-    #toolbar { position: fixed; top: 30px; right: 30px; z-index: 2001; display: flex; gap: 12px; }
+    #toolbar { position: fixed; top: 30px; right: 30px; z-index: 10000; display: flex; gap: 12px; }
     .tb-btn { 
-      background: #2d3748; 
-      border: 2px solid rgba(255,255,255,0.4); 
-      color: white; 
-      min-width: 48px; height: 48px; border-radius: 10px; 
-      cursor: pointer; font-weight: 800; font-size: 22px;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-      transition: all 0.2s ease;
+      background: #1f2937 !important; border: 2px solid #4b5563 !important; 
+      color: #fff !important; min-width: 50px; height: 50px; border-radius: 12px; 
+      cursor: pointer; font-weight: 800; font-size: 22px; display: flex; 
+      align-items: center; justify-content: center; box-shadow: 0 10px 15px rgba(0,0,0,0.5);
     }
-    .tb-btn.text-btn { font-size: 15px; padding: 0 20px; width: auto; }
-    .tb-btn:hover { background: #4a5568; border-color: #fff; transform: translateY(-1px); }
+    .tb-btn.txt { font-size: 15px; width: auto; padding: 0 20px; }
+    .tb-btn:hover { background: #374151 !important; border-color: #fff !important; }
 
-    /* READABILITY FIX: Solid High-Contrast Boxes */
+    /* THE TEXT BOX FIX */
     .markmap-foreign {
-      background: var(--node-bg) !important; 
-      border: 2px solid var(--accent) !important;
-      border-radius: 10px !important;
-      padding: 12px 24px !important; /* Larger hit area */
+      background-color: var(--box-bg) !important; /* Forces solid background */
+      border: 3px solid var(--border) !important; /* Thick bright border */
+      border-radius: 12px !important;
+      padding: 15px 25px !important; /* Bigger boxes */
       color: #ffffff !important;
-      font-weight: 700 !important;
-      font-size: 17px !important; /* Increased font size */
-      box-shadow: 0 10px 25px rgba(0,0,0,0.7);
-      white-space: nowrap;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      font-weight: 800 !important;
+      font-size: 18px !important; 
+      box-shadow: 0 15px 30px rgba(0,0,0,0.8) !important;
+      white-space: nowrap !important;
     }
-    .markmap-foreign div { color: #ffffff !important; }
+    .markmap-foreign div { color: #ffffff !important; background: transparent !important; }
     
-    /* Line/Branch styles */
-    .markmap-link { stroke: rgba(255,255,255,0.35) !important; stroke-width: 3px !important; }
+    /* BRANCH LINES */
+    .markmap-link { stroke: #4b5563 !important; stroke-width: 3px !important; }
   </style>
 </head>
 <body>
@@ -64,10 +59,10 @@
     <div id="subtitle">Based on 179 sources</div>
   </div>
   <div id="toolbar">
-    <button class="tb-btn" id="zin" title="Zoom In">+</button>
-    <button class="tb-btn" id="zout" title="Zoom Out">−</button>
-    <button class="tb-btn text-btn" id="reset">Resize</button>
-    <button class="tb-btn text-btn" id="close">Close</button>
+    <button class="tb-btn" id="zin">+</button>
+    <button class="tb-btn" id="zout">−</button>
+    <button class="tb-btn txt" id="res">Resize</button>
+    <button class="tb-btn txt" id="cls">Close</button>
   </div>
   <svg id="svg" class="markmap"></svg>
 
@@ -80,35 +75,34 @@
       const { Transformer, Markmap } = window.markmap;
       const svg = document.querySelector('#svg');
       let mm = null;
-      const transformer = new Transformer();
+      const trans = new Transformer();
 
       window.addEventListener('message', (ev) => {
         if (ev.data.type !== 'VAT_SET') return;
-        const { root } = transformer.transform(ev.data.markdown || '');
+        const { root } = trans.transform(ev.data.markdown || '');
         if (!mm) {
           mm = Markmap.create(svg, {
             autoFit: true,
-            spacingVertical: 70, /* Stretching lines for clarity */
-            spacingHorizontal: 180,
+            spacingVertical: 80, /* Massive spacing to prevent "narrow" look */
+            spacingHorizontal: 200,
           }, root);
         } else {
-          mm.setData(root);
-          mm.fit();
+          mm.setData(root); mm.fit();
         }
       });
 
-      // StopPropagation prevents the "click-through" to background links
-      const btns = ['zin', 'zout', 'reset', 'close'];
-      btns.forEach(id => {
-        document.getElementById(id).addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (id === 'zin') mm.rescale(1.3);
-          if (id === 'zout') mm.rescale(0.7);
-          if (id === 'reset') mm.fit();
-          if (id === 'close') window.parent.postMessage({type:'VAT_CLOSE'}, '*');
+      // BLOCK PROPAGATION: Prevents buttons from clicking "through" to background
+      const setupBtn = (id, fn) => {
+        const b = document.getElementById(id);
+        b.addEventListener('click', (e) => {
+          e.preventDefault(); e.stopPropagation(); fn();
         }, true);
-      });
+      };
+
+      setupBtn('zin', () => mm.rescale(1.3));
+      setupBtn('zout', () => mm.rescale(0.7));
+      setupBtn('res', () => mm.fit());
+      setupBtn('cls', () => window.parent.postMessage({type:'VAT_CLOSE'}, '*'));
 
       window.parent.postMessage({ type: 'VAT_READY' }, '*');
     })();
