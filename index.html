@@ -3,297 +3,190 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>VAT Taxonomy Viewer</title>
+  <title>VAT Mindmap Viewer</title>
+
   <style>
-    :root { color-scheme: dark; }
-    html, body { height: 100%; margin: 0; background: #2f343d; overflow: hidden;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: rgba(255,255,255,.92); }
-
-    header{
-      position: fixed; inset: 0 0 auto 0; height: 64px;
-      display:flex; align-items:flex-start; justify-content:space-between;
-      padding: 14px 16px 0 16px;
-      z-index: 10; pointer-events: none;
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: #0b0f16;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     }
-    .h-left { pointer-events: none; }
-    .h-title { font-weight: 700; font-size: 22px; line-height: 1.15; }
-    .h-sub { margin-top: 4px; font-size: 12px; opacity: .75; }
 
-    .h-right { display:flex; gap:10px; pointer-events: auto; }
-    .btn{
-      appearance:none; border:1px solid rgba(255,255,255,.18);
-      background: rgba(0,0,0,.20); color: rgba(255,255,255,.92);
-      border-radius: 10px; padding: 8px 10px; font: inherit; cursor:pointer;
+    /* Fullscreen SVG */
+    #mm {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      background: #0b0f16;
     }
-    .btn:hover{ background: rgba(0,0,0,.28); }
 
-    /* EMBED MODE: hide viewer buttons + hint when embedded */
-    html.embed header .h-right { display: none !important; }
-    html.embed .hint { display: none !important; }
+    /* Subtle links */
+    .markmap-link { stroke: rgba(148, 163, 184, 0.35); }
 
-    #wrap{ position: fixed; inset: 0; }
-    svg{ width:100%; height:100%; display:block; }
+    /* Node "pill" styling (NotebookLM-ish) */
+    .markmap-foreign {
+      display: inline-block;
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: rgba(55, 65, 81, 0.95);   /* slate-ish */
+      border: 1px solid rgba(255,255,255,0.10);
+      color: rgba(255,255,255,0.92);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+      backdrop-filter: blur(6px);
+      max-width: 520px; /* keeps long nodes from stretching too far */
+    }
+    .markmap-foreign a { color: rgba(255,255,255,0.92); text-decoration: none; }
+    .markmap-foreign a:hover { text-decoration: underline; }
 
-    .link{ fill:none; stroke: rgba(148,163,184,.35); stroke-width: 2; }
+    /* Make the root a touch bolder */
+    .markmap-node:first-child .markmap-foreign {
+      font-weight: 800;
+      background: rgba(31, 41, 55, 0.95);
+    }
 
-    .card{
-      display:inline-flex; align-items:center; gap:10px;
-      padding: 10px 12px; border-radius: 10px;
+    /* Optional status (hidden in embed=1) */
+    #status {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      padding: 10px 12px;
+      border-radius: 12px;
       border: 1px solid rgba(255,255,255,.12);
-      background: rgba(75,85,99,.42);
-      box-shadow: 0 10px 24px rgba(0,0,0,.18);
-      white-space: nowrap; user-select:none;
-      color: rgba(255,255,255,.95);
+      background: rgba(0,0,0,.30);
+      color: rgba(255,255,255,.82);
+      font-size: 12px;
+      font-weight: 650;
+      user-select: none;
     }
-    .label{ font-size: 14px; line-height: 1.2; max-width: 560px; overflow:hidden; text-overflow: ellipsis; }
-
-    .chev{
-      margin-left: 6px; opacity:.78; font-weight:800;
-      border:1px solid rgba(255,255,255,.14);
-      width:22px; height:22px; border-radius: 7px;
-      display:inline-flex; align-items:center; justify-content:center;
-      background: rgba(0,0,0,.18); flex:0 0 auto;
-    }
-
-    .pill{
-      display:inline-flex; align-items:center;
-      padding: 4px 10px; border-radius: 999px;
-      font-weight: 700; font-size: 12px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-      margin-left: 10px;
-    }
-    .pill.zero     { background: rgba(34,197,94,.20);  border-color: rgba(34,197,94,.35); }
-    .pill.standard { background: rgba(239,68,68,.18);  border-color: rgba(239,68,68,.35); }
-    .pill.reduced  { background: rgba(245,158,11,.18); border-color: rgba(245,158,11,.35); }
-    .pill.exempt   { background: rgba(148,163,184,.18); border-color: rgba(148,163,184,.35); }
-    .pill.depends  { background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.35); }
-
-    .hint{
-      position: fixed; left: 16px; bottom: 14px;
-      font-size: 12px; opacity: .70;
-      background: rgba(0,0,0,.18);
-      border: 1px solid rgba(255,255,255,.12);
-      padding: 8px 10px; border-radius: 10px;
-      pointer-events:none;
-    }
+    #status.hidden { display: none; }
   </style>
+
+  <!-- Markmap (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib/dist/browser/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view/dist/browser/index.min.js"></script>
 </head>
 
 <body>
-  <header>
-    <div class="h-left">
-      <div class="h-title" id="title">UK VAT Taxonomy</div>
-      <div class="h-sub" id="sub">Waiting for markdown…</div>
-    </div>
-    <div class="h-right">
-      <button class="btn" id="btnFit" type="button">Fit</button>
-      <button class="btn" id="btnHome" type="button">Home</button>
-    </div>
-  </header>
+  <div id="status">Waiting for markdown…</div>
+  <svg id="mm"></svg>
 
-  <div id="wrap"><svg id="svg"></svg></div>
-  <div class="hint">Click a node to expand/collapse. Drag to pan. Scroll to zoom. Esc = Home.</div>
-
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
-      const EMBED = params.get("embed") === "1" || (window.self !== window.top);
-      if (EMBED) document.documentElement.classList.add("embed");
 
-      const MAX_DEPTH = 6;
-      const COLLAPSE_FROM_DEPTH = 2;
-      const NODE_GAP_X = 64;
-      const NODE_GAP_Y = 280;
+      // embed=1 => hide status (Squarespace overlay already has controls)
+      const EMBED = params.get("embed") === "1";
 
-      const svg = d3.select("#svg");
-      const g = svg.append("g");
-      const titleEl = document.getElementById("title");
-      const subEl = document.getElementById("sub");
-      const btnFit = document.getElementById("btnFit");
-      const btnHome = document.getElementById("btnHome");
+      // depth=5 => shows up to ~6 heading levels (# .. ######), collapses deeper
+      // (Root depth=0, children depth=1, etc.)
+      const MAX_DEPTH = Math.max(1, parseInt(params.get("depth") || "5", 10));
 
-      let root = null;
-      let zoom = null;
+      const statusEl = document.getElementById("status");
+      if (EMBED) statusEl.classList.add("hidden");
 
-      function decodeEntities(s) {
-        const ta = document.createElement("textarea");
-        ta.innerHTML = String(s ?? "");
-        return ta.value;
+      const svg = document.getElementById("mm");
+      const { Transformer } = window.markmap;
+      const { Markmap } = window.markmap;
+
+      const transformer = new Transformer();
+      let mm = null;
+
+      function setStatus(msg) {
+        if (!statusEl || statusEl.classList.contains("hidden")) return;
+        statusEl.textContent = msg;
       }
 
-      function setSub(msg) { subEl.textContent = msg; }
-
-      zoom = d3.zoom().scaleExtent([0.35, 2.6]).on("zoom", (event) => g.attr("transform", event.transform));
-      svg.call(zoom);
-
-      function parseHeadings(md) {
-        const lines = String(md || "").split(/\r?\n/);
-        const items = [];
-        for (const line of lines) {
-          const m = line.match(/^(#{1,6})\s+(.*)$/);
-          if (!m) continue;
-          const level = m[1].length;
-          const text = decodeEntities((m[2] || "").trim());
-          if (!text) continue;
-          items.push({ level, text });
+      function collapseBeyondDepth(node, depth) {
+        if (!node) return;
+        const payload = node.payload || (node.payload = {});
+        if (depth >= MAX_DEPTH) {
+          // Markmap respects payload.fold for collapsing
+          payload.fold = 1;
+          node.folded = true; // extra compatibility
         }
-        if (!items.length) return null;
-
-        const baseLevel = items[0].level;
-        const rootNode = { name: items[0].text, children: [] };
-        const stack = [{ level: items[0].level, node: rootNode }];
-
-        for (let i = 1; i < items.length; i++) {
-          const { level, text } = items[i];
-          const relDepth = (level - baseLevel) + 1;
-          if (relDepth > MAX_DEPTH) continue;
-
-          const node = { name: text, children: [] };
-          while (stack.length && stack[stack.length - 1].level >= level) stack.pop();
-          const parent = stack.length ? stack[stack.length - 1].node : rootNode;
-          parent.children.push(node);
-          stack.push({ level, node });
-        }
-        return rootNode;
-      }
-
-      function classifyVatPill(name) {
-        const t = String(name || "").toLowerCase();
-        if (t.includes("zero-rated"))     return { cls: "zero", label: "Zero-Rated" };
-        if (t.includes("standard-rated")) return { cls: "standard", label: "Standard-Rated" };
-        if (t.includes("reduced-rated"))  return { cls: "reduced", label: "Reduced-Rated" };
-        if (t.includes("exempt"))         return { cls: "exempt", label: "Exempt" };
-        if (t.includes("depends"))        return { cls: "depends", label: "Depends" };
-        return null;
-      }
-
-      function collapse(d) {
-        if (d.children) {
-          d._children = d.children;
-          d._children.forEach(collapse);
-          d.children = null;
+        if (node.children && node.children.length) {
+          for (const ch of node.children) collapseBeyondDepth(ch, depth + 1);
         }
       }
 
-      function collapseFromDepth(d, depth) {
-        if (!d) return;
-        if (depth >= COLLAPSE_FROM_DEPTH) {
-          collapse(d);
-        } else {
-          if (d.children) d.children.forEach(ch => collapseFromDepth(ch, depth + 1));
-        }
-      }
-
-      function expandAll(d) {
-        if (d._children) { d.children = d._children; d._children = null; }
-        if (d.children) d.children.forEach(expandAll);
-      }
-
-      function update() {
-        const tree = d3.tree().nodeSize([NODE_GAP_X, NODE_GAP_Y]);
-        tree(root);
-
-        const nodes = root.descendants();
-        const links = root.links();
-        nodes.forEach(d => { d.y = d.depth * NODE_GAP_Y; });
-
-        const linkSel = g.selectAll("path.link").data(links, d => d.target.id);
-        linkSel.enter().append("path").attr("class", "link")
-          .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
-        linkSel.attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
-        linkSel.exit().remove();
-
-        const nodeSel = g.selectAll("g.node").data(nodes, d => d.id);
-
-        const nodeEnter = nodeSel.enter().append("g")
-          .attr("class", "node")
-          .attr("transform", d => `translate(${d.y},${d.x})`)
-          .style("cursor", "pointer")
-          .on("click", (event, d) => {
-            event.preventDefault();
-            event.stopPropagation();
-            if (d.children) { d._children = d.children; d.children = null; }
-            else { d.children = d._children; d._children = null; }
-            update();
-          });
-
-        nodeEnter.append("foreignObject")
-          .attr("x", 0).attr("y", -20)
-          .attr("width", d => {
-            const base = (String(d.data.name || "").length * 7) + 110;
-            return Math.max(200, Math.min(600, base));
-          })
-          .attr("height", 48)
-          .append("xhtml:div")
-          .attr("class", "card")
-          .html(d => {
-            const name = String(d.data.name || "");
-            const pill = classifyVatPill(name);
-            const pillHtml = pill ? ` <span class="pill ${pill.cls}">${pill.label}</span>` : "";
-            const hasKids = (d.children && d.children.length) || (d._children && d._children.length);
-            const chev = hasKids ? `<span class="chev">›</span>` : `<span class="chev" style="opacity:.18">•</span>`;
-            return `<span class="label">${name}${pillHtml}</span>${chev}`;
-          });
-
-        nodeSel.attr("transform", d => `translate(${d.y},${d.x})`);
-        nodeSel.exit().remove();
-      }
-
-      function fitToScreen() {
-        const svgNode = svg.node();
-        const gNode = g.node();
-        if (!svgNode || !gNode) return;
-
-        const bbox = gNode.getBBox();
-        const w = svgNode.clientWidth, h = svgNode.clientHeight;
-        if (!bbox.width || !bbox.height) return;
-
-        const pad = 70;
-        const scale = Math.min(2.4, Math.max(0.35, Math.min((w - pad) / bbox.width, (h - pad) / bbox.height)));
-        const tx = (w - scale * (bbox.x + bbox.width / 2)) / 2;
-        const ty = (h - scale * (bbox.y + bbox.height / 2)) / 2;
-
-        svg.transition().duration(220).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
-      }
-
-      function home() {
-        if (!root) return;
-        expandAll(root);
-        if (root.children) root.children.forEach(ch => collapseFromDepth(ch, 1));
-        update();
-        setTimeout(fitToScreen, 40);
-      }
-
-      // Buttons (visible only when NOT embedded)
-      if (btnFit) btnFit.addEventListener("click", fitToScreen);
-      if (btnHome) btnHome.addEventListener("click", home);
-
-      document.addEventListener("keydown", (e) => { if (e.key === "Escape") home(); });
-
-      async function loadMarkdown(md) {
-        const treeObj = parseHeadings(md);
-        if (!treeObj) {
-          titleEl.textContent = "UK VAT Taxonomy";
-          setSub("No headings found in markdown.");
-          g.selectAll("*").remove();
+      function renderMarkdown(md) {
+        const clean = String(md || "").trim();
+        if (!clean) {
+          setStatus("No markdown received.");
           return;
         }
 
-        titleEl.textContent = treeObj.name || "UK VAT Taxonomy";
-        setSub("Loaded. Expand branches to reveal routes and VAT outcomes.");
+        setStatus("Rendering…");
 
-        root = d3.hierarchy(treeObj, d => d.children);
-        let i = 0; root.each(d => d.id = ++i);
+        const { root } = transformer.transform(clean);
 
-        if (root.children) root.children.forEach(ch => collapseFromDepth(ch, 1));
+        // Collapse deeper branches for big taxonomies
+        collapseBeyondDepth(root, 0);
 
-        g.selectAll("*").remove();
-        update();
-        setTimeout(fitToScreen, 40);
+        if (!mm) {
+          mm = Markmap.create(svg, {
+            duration: 240
+          }, root);
+        } else {
+          mm.setData(root);
+        }
+
+        // Fit after layout settles
+        setTimeout(() => {
+          try { mm.fit(); } catch (e) {}
+          setStatus("Ready");
+          if (!EMBED) {
+            setTimeout(() => setStatus("Ready (click nodes to expand/collapse)"), 600);
+          }
+        }, 50);
       }
 
+      function extractMarkdown(data) {
+        if (!data) return "";
+        if (typeof data === "string") return data;
+        if (typeof data === "object") {
+          if (typeof data.markdown === "string") return data.markdown;
+          if (typeof data.md === "string") return data.md;
+          if (typeof data.text === "string") return data.text;
+        }
+        return "";
+      }
+
+      // Listen for parent messages
       window.addEventListener("message", (event) => {
-        const data = event.data || {};
-        if (typeof data !== "ob
+        const d = event.data;
+
+        // Accept the VAT message type, plus a couple fallbacks
+        const type = (d && typeof d === "object" && d.type) ? d.type : "";
+
+        if (type === "VAT_MINDMAP_MD" || type === "MARKDOWN" || type === "MD" || type === "") {
+          const md = extractMarkdown(d);
+          if (md) renderMarkdown(md);
+          return;
+        }
+
+        if (type === "FIT") {
+          if (mm) {
+            try { mm.fit(); } catch (e) {}
+          }
+          return;
+        }
+      });
+
+      // Handshake so Squarespace knows when to post
+      function notifyReady() {
+        try {
+          window.parent && window.parent.postMessage({ type: "VAT_MINDMAP_READY" }, "*");
+        } catch (e) {}
+      }
+
+      window.addEventListener("load", notifyReady);
+      notifyReady();
+      setStatus("Waiting for markdown…");
+    })();
+  </script>
+</body>
+</html>
