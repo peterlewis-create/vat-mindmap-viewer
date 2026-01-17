@@ -7,21 +7,15 @@
 
   <style>
     html, body { height:100%; margin:0; }
-    body{
-      background:#0b0f16;
-      overflow:hidden;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    }
+    body{ background:#0b0f16; overflow:hidden; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
     #mm{ width:100vw; height:100vh; display:block; background:#0b0f16; }
     .markmap-link{ opacity:0.40; }
     foreignObject{ overflow:visible !important; }
 
-    /* NotebookLM-like header (top-left) */
     #hdr{ position:fixed; left:18px; top:16px; z-index:30; pointer-events:none; }
     #hdrTitle{ font-size:22px; font-weight:850; color:rgba(255,255,255,.96); margin:0 0 6px 0; }
     #hdrSub{ font-size:13px; font-weight:650; color:rgba(255,255,255,.62); margin:0; }
 
-    /* Viewer controls (top-right) */
     #uiBar{
       position:fixed; right:14px; top:14px; z-index:40;
       display:flex; gap:8px; align-items:center;
@@ -44,66 +38,45 @@
     #uiBar button:hover{ background:rgba(255,255,255,.10); }
     #uiBar .sep{ width:1px; height:22px; background:rgba(255,255,255,.14); margin:0 2px; }
 
-    /* Node pill */
     .markmap-foreign{
-      display:flex !important;
-      align-items:center;
-      gap:10px;
+      display:flex !important; align-items:center; gap:10px;
       box-sizing:border-box !important;
       padding:10px 12px;
       border-radius:14px;
       background:rgba(55,65,81,0.82);
       border:1px solid rgba(255,255,255,0.12);
       color:rgba(255,255,255,0.96) !important;
-      font-size:16px;
-      font-weight:800;
-      line-height:1.18;
+      font-size:16px; font-weight:800; line-height:1.18;
       text-align:left;
       box-shadow:0 12px 34px rgba(0,0,0,0.28);
       backdrop-filter:blur(7px);
-
-      /* depth>=2 wraps */
-      width:340px;
-      max-width:340px;
+      width:340px; max-width:340px;
       white-space:normal !important;
-      overflow-wrap:anywhere;
-      word-break:break-word;
-      hyphens:auto;
+      overflow-wrap:anywhere; word-break:break-word; hyphens:auto;
       cursor:pointer;
     }
     .markmap-foreign *{ color:rgba(255,255,255,0.96) !important; }
 
-    /* depth 0 & 1: wide, no-wrap */
     .mm-depth-0, .mm-depth-1{
-      width:auto !important;
-      max-width:none !important;
+      width:auto !important; max-width:none !important;
       white-space:nowrap !important;
-      font-size:17px !important;
-      font-weight:850 !important;
+      font-size:17px !important; font-weight:850 !important;
       padding:12px 14px !important;
     }
 
-    /* + / − expander */
     .mm-expander{
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      width:22px;
-      height:22px;
+      display:inline-flex; align-items:center; justify-content:center;
+      width:22px; height:22px;
       border-radius:999px;
       border:1px solid rgba(255,255,255,0.18);
       background:rgba(0,0,0,0.20);
       color:rgba(255,255,255,0.88);
-      font-weight:950;
-      font-size:14px;
+      font-weight:950; font-size:14px;
       flex:0 0 auto;
       cursor:pointer;
       user-select:none;
     }
-    .mm-expander.mm-disabled{
-      opacity:0.35;
-      cursor:default;
-    }
+    .mm-expander.mm-disabled{ opacity:0.35; cursor:default; }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -132,8 +105,6 @@
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
-
-      // Squarespace sets init=2 for "first two levels only"
       const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10));
       const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max") || "6", 10));
 
@@ -149,7 +120,19 @@
       let initialRoot = null;
       let liveRoot = null;
 
+      let lastHash = "";
+      let lastLen = 0;
+
       function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
+
+      function hashStr(s){
+        let h = 0;
+        for (let i=0; i<s.length; i++){
+          h = ((h << 5) - h) + s.charCodeAt(i);
+          h |= 0;
+        }
+        return String(h);
+      }
 
       function decodeHtmlEntities(str){
         const t = document.createElement("textarea");
@@ -163,18 +146,10 @@
         hdrSubEl.textContent = sources ? ("Based on " + sources + " sources") : "";
       }
 
-      // Ensure ONLY first N levels show on load (not just “initialExpandLevel”)
-      // Markmap level count includes root => INIT_LEVEL=2 means show root + its children.
       function foldFrom(node, depth, showDepth){
         if (!node) return;
         node.payload ||= {};
-
-        // if depth >= (showDepth-1) then this node’s children should be folded
-        // so grandchildren disappear until expanded by user
-        if (depth >= showDepth - 1 && node.children && node.children.length) {
-          node.payload.fold = 1;
-        }
-
+        if (depth >= showDepth - 1 && node.children && node.children.length) node.payload.fold = 1;
         if (node.children) node.children.forEach(ch => foldFrom(ch, depth+1, showDepth));
       }
 
@@ -185,35 +160,17 @@
         if (node.children) node.children.forEach(ch => collapseBeyond(ch, depth+1, maxDepth));
       }
 
-      async function fitReadable(){
+      function currentZoom(){
+        try { return d3.zoomTransform(svg).k || 1; } catch(e) { return 1; }
+      }
+
+      async function fitClamped(maxZoom){
         if (!mm) return;
         try { await mm.fit(1.02); } catch(e) {}
         try {
-          const k = mm.state && mm.state.transform ? mm.state.transform.k : 1;
-          await mm.rescale(Math.max(k, 1.18));
+          const k = currentZoom();
+          if (k > maxZoom) await mm.rescale(maxZoom);
         } catch(e) {}
-      }
-
-      function setFold(inode, foldVal){
-        const d = inode && inode.data;
-        if (!d) return;
-        d.payload ||= {};
-        d.payload.fold = foldVal;
-      }
-
-      function toggle(inode){
-        const d = inode && inode.data;
-        if (!d || !d.children || !d.children.length) return;
-
-        d.payload ||= {};
-        d.payload.fold = (d.payload.fold === 1) ? 0 : 1;
-
-        mm.setData(liveRoot);
-        setTimeout(async ()=>{
-          decorateAndBind();
-          await fitReadable();      // keeps levels visually aligned after open/close
-          decorateAndBind();
-        }, 40);
       }
 
       function decorateAndBind(){
@@ -222,7 +179,6 @@
           if (!inode || !inode.data) return;
 
           const depth = typeof inode.depth === "number" ? inode.depth : 0;
-
           const pill = g.querySelector(".markmap-foreign");
           if (!pill) return;
 
@@ -231,7 +187,6 @@
 
           const hasChildren = inode.data.children && inode.data.children.length;
 
-          // Ensure expander exists on ALL nodes (disabled for leaf nodes)
           let exp = pill.querySelector(".mm-expander");
           if (!exp) {
             exp = document.createElement("span");
@@ -248,23 +203,26 @@
             exp.textContent = "•";
           }
 
-          // Bind click handlers once
           if (pill.dataset.vatBound === "1") return;
           pill.dataset.vatBound = "1";
 
-          exp.addEventListener("click", (e)=>{
-            e.preventDefault();
-            e.stopPropagation();
+          function toggle(){
             if (!hasChildren) return;
-            toggle(inode);
-          });
+            inode.data.payload ||= {};
+            inode.data.payload.fold = (inode.data.payload.fold === 1) ? 0 : 1;
 
-          pill.addEventListener("click", (e)=>{
-            e.preventDefault();
-            e.stopPropagation();
-            if (!hasChildren) return;
-            toggle(inode);
-          });
+            mm.setData(liveRoot);
+
+            setTimeout(async ()=>{
+              decorateAndBind();
+              // Allow more zoom when deeper expands, but prevent huge zoom when shallow
+              await fitClamped(1.10);
+              decorateAndBind();
+            }, 35);
+          }
+
+          exp.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); if (!hasChildren) return; toggle(); });
+          pill.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); if (!hasChildren) return; toggle(); });
         });
       }
 
@@ -275,9 +233,7 @@
         const { root } = transformer.transform(clean);
         setHeaderFrom(root && root.content ? root.content : "");
 
-        // hard-fold so opening screen shows only first two levels
         foldFrom(root, 0, INIT_LEVEL);
-        // and never show deeper than MAX_LEVEL unless opened step-by-step
         collapseBeyond(root, 0, MAX_LEVEL);
 
         initialRoot = deepClone(root);
@@ -288,18 +244,13 @@
           pan:true,
           zoom:true,
           scrollForPan:true,
-          duration:220,
-
-          // “column/vertical alignment feel”
+          duration:160,
           spacingHorizontal: 210,
           spacingVertical: 140,
-
           paddingX: 18,
           nodeMinHeight: 26,
           maxWidth: 560,
-
           initialExpandLevel: INIT_LEVEL,
-
           color: () => "rgba(148,163,184,0.60)",
           lineWidth: () => 1.2
         };
@@ -307,27 +258,30 @@
         if (!mm) {
           mm = Markmap.create(svg, opts, liveRoot);
 
-          document.getElementById("zoomIn").addEventListener("click", () => {
-            const k = mm.state.transform.k;
-            mm.rescale(k * 1.15);
+          document.getElementById("zoomIn").addEventListener("click", async ()=>{
+            const k = currentZoom();
+            try { await mm.rescale(k * 1.15); } catch(e) {}
           });
-          document.getElementById("zoomOut").addEventListener("click", () => {
-            const k = mm.state.transform.k;
-            mm.rescale(k / 1.15);
+          document.getElementById("zoomOut").addEventListener("click", async ()=>{
+            const k = currentZoom();
+            try { await mm.rescale(Math.max(0.2, k / 1.15)); } catch(e) {}
           });
-          document.getElementById("overview").addEventListener("click", async ()=>{ await fitReadable(); });
+
+          document.getElementById("overview").addEventListener("click", async ()=>{ await fitClamped(1.10); });
+
           document.getElementById("readable").addEventListener("click", async ()=>{
-            const k = mm.state.transform.k;
-            await mm.rescale(Math.max(k, 1.25));
+            const k = currentZoom();
+            try { await mm.rescale(Math.max(k, 1.15)); } catch(e) {}
           });
+
           document.getElementById("reset").addEventListener("click", async ()=>{
             liveRoot = deepClone(initialRoot);
             mm.setData(liveRoot);
             setTimeout(async ()=>{
               decorateAndBind();
-              await fitReadable();
+              await fitClamped(1.10);
               decorateAndBind();
-            }, 40);
+            }, 35);
           });
         } else {
           mm.setOptions(opts);
@@ -336,8 +290,12 @@
 
         setTimeout(async ()=>{
           decorateAndBind();
-          await fitReadable();
+          // IMPORTANT: clamp prevents giant zoom when only 2 nodes visible
+          await fitClamped(1.10);
           decorateAndBind();
+
+          // Tell parent we are loaded (stops retry logic)
+          try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_ACK" }, "*"); } catch(e) {}
         }, 60);
       }
 
@@ -353,17 +311,29 @@
       }
 
       window.addEventListener("message", (event)=>{
-        const d = event.data;
-        const type = (d && typeof d === "object" && d.type) ? d.type : "";
+        const d = event.data || {};
+        const type = d.type || "";
+
         if (type === "VAT_MINDMAP_MD" || type === "MARKDOWN" || type === "MD" || type === "") {
           const md = extractMarkdown(d);
-          if (md) renderMarkdown(md);
+          if (!md) return;
+
+          const h = hashStr(md);
+          if (h === lastHash && md.length === lastLen) {
+            // Duplicate: just ACK (prevents shudder)
+            try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_ACK" }, "*"); } catch(e) {}
+            return;
+          }
+          lastHash = h;
+          lastLen = md.length;
+
+          renderMarkdown(md);
         }
-        if (type === "FIT") {
-          fitReadable();
-        }
+
+        if (type === "FIT") fitClamped(1.10);
       });
 
+      // Handshake: tell parent we are ready (so parent posts ONCE)
       try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_READY" }, "*"); } catch(e) {}
     })();
   </script>
