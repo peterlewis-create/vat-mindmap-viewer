@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
   <style>
+    /* 1. NUCLEAR RESET: Block all transparency */
     :root {
       --bg: #0b0f14;
-      --box-bg: #1e293b; /* Solid dark slate for text boxes */
+      --box-bg: #1e293b; 
       --text: #ffffff;
       --accent: #3b82f6;
     }
@@ -15,47 +16,42 @@
       height: 100% !important; margin: 0 !important; 
       background-color: var(--bg) !important; 
       overflow: hidden !important; 
-      font-family: ui-sans-serif, system-ui, sans-serif !important; 
+      font-family: sans-serif !important; 
     }
-    #svg { width: 100vw; height: 100vh; display: block; background-color: var(--bg); }
+    #svg { width: 100vw; height: 100vh; display: block; background-color: var(--bg) !important; }
 
-    /* Header & Buttons - Fixed Z-Index to block background clicks */
-    #header { position: fixed; top: 30px; left: 300px; z-index: 99999; pointer-events: none; }
-    #title { font-size: 32px; font-weight: 800; color: #fff; margin: 0; text-shadow: 0 4px 12px rgba(0,0,0,0.9); }
-    #subtitle { font-size: 16px; color: #94a3b8; margin-top: 5px; }
-    
-    #toolbar { position: fixed; top: 30px; right: 30px; z-index: 100000; display: flex; gap: 12px; }
-    .tb-btn { 
-      background: #334155 !important; border: 2px solid #64748b !important; 
-      color: #fff !important; min-width: 50px; height: 50px; border-radius: 12px; 
-      cursor: pointer; font-weight: 800; font-size: 16px; display: flex; 
-      align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,0,0,0.6);
-    }
-    .tb-btn:hover { background: #475569 !important; border-color: #fff !important; }
-
-    /* Sidebar for Verified Sources */
+    /* 2. SIDEBAR & HEADER: Clear and solid */
     #sidebar {
-      position: fixed; top: 0; left: 0; bottom: 0; width: 260px;
-      background: #0f172a; border-right: 1px solid rgba(255,255,255,0.1);
-      padding: 40px 20px; z-index: 99998; color: #fff; overflow-y: auto;
+      position: fixed; top: 0; left: 0; bottom: 0; width: 280px;
+      background: #0f172a !important; border-right: 2px solid var(--accent);
+      padding: 40px 20px; z-index: 9999; color: #fff; overflow-y: auto;
     }
-    #sidebar h3 { font-size: 18px; font-weight: 800; margin-bottom: 25px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
-    .source-item { margin-bottom: 20px; font-size: 14px; line-height: 1.4; }
-    .source-item strong { display: block; color: var(--accent); margin-bottom: 4px; }
+    #header { position: fixed; top: 30px; left: 310px; z-index: 9999; pointer-events: none; }
+    #title { font-size: 32px; font-weight: 800; color: #fff !important; margin: 0; }
+    #subtitle { font-size: 16px; color: #94a3b8 !important; }
 
-    /* THE READABILITY FIX: High contrast solid boxes */
+    /* 3. BUTTONS: Forced visibility and click capture */
+    #toolbar { position: fixed; top: 30px; right: 30px; z-index: 10000; display: flex; gap: 12px; }
+    .tb-btn { 
+      background: #334155 !important; border: 2px solid #fff !important; 
+      color: #fff !important; min-width: 50px; height: 50px; border-radius: 12px; 
+      cursor: pointer !important; font-weight: 800; font-size: 16px; display: flex; 
+      align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,0,0,0.8);
+    }
+
+    /* 4. READABILITY: Solid, high-contrast text boxes */
     .markmap-foreign {
-      background-color: var(--box-bg) !important; 
-      border: 3px solid var(--accent) !important;
+      background-color: #1e293b !important; 
+      border: 3px solid #3b82f6 !important;
       border-radius: 10px !important;
       padding: 12px 20px !important; 
       color: #ffffff !important;
       font-weight: 800 !important;
-      font-size: 17px !important; 
-      box-shadow: 0 12px 24px rgba(0,0,0,0.8) !important;
-      white-space: nowrap !important;
+      font-size: 18px !important; 
+      box-shadow: 0 12px 24px rgba(0,0,0,0.9) !important;
       display: flex !important;
       align-items: center !important;
+      white-space: nowrap !important;
     }
     .markmap-foreign div { color: #ffffff !important; background: transparent !important; }
     .markmap-link { stroke: #475569 !important; stroke-width: 3px !important; }
@@ -63,64 +59,45 @@
 </head>
 <body>
   <div id="sidebar">
-    <h3>Verified Sources</h3>
-    <div class="source-item"><strong>VAT Notice 701/15:</strong> Animals and animal food</div>
-    <div class="source-item"><strong>VFOOD3020:</strong> Internal Manual - Animal feeding stuffs</div>
-    <div class="source-item"><strong>VFOOD3100:</strong> Internal Manual - Categories of animal foodstuffs</div>
-    <div class="source-item"><strong>VFOOD3620:</strong> Internal Manual - Live animals</div>
-    <div class="source-item"><strong>VFOOD8520:</strong> Internal Manual - Pet food and wild bird food</div>
+    <h3 style="border-bottom: 2px solid #3b82f6; padding-bottom:10px;">Verified Sources</h3>
+    <p><strong>VAT Notice 701/15:</strong><br>Animals and animal food</p>
+    <p><strong>VFOOD3020:</strong><br>Animal feeding stuffs</p>
+    <p><strong>VFOOD3100:</strong><br>Categories of animal foodstuffs</p>
+    <p><strong>VFOOD3620:</strong><br>Live animals</p>
+    <p><strong>VFOOD8520:</strong><br>Pet food and wild bird food</p>
   </div>
-
-  <div id="header">
-    <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">Based on 179 sources</div>
-  </div>
-
+  <div id="header"><div id="title">Taxonomy: Animals, Food, and Catering</div></div>
   <div id="toolbar">
     <button class="tb-btn" id="zin">+</button>
     <button class="tb-btn" id="zout">−</button>
-    <button class="tb-btn" id="res">Resize</button>
-    <button class="tb-btn" id="cls">Close</button>
+    <button class="tb-btn" style="width:auto; padding:0 15px;" id="res">Resize</button>
+    <button class="tb-btn" style="width:auto; padding:0 15px;" id="cls">Close</button>
   </div>
   <svg id="svg" class="markmap"></svg>
-
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
-
   <script>
     (function () {
       const { Transformer, Markmap } = window.markmap;
       const svg = document.querySelector('#svg');
       let mm = null;
       const trans = new Transformer();
-
       window.addEventListener('message', (ev) => {
         if (ev.data.type !== 'VAT_SET') return;
         const { root } = trans.transform(ev.data.markdown || '');
-        if (!mm) {
-          mm = Markmap.create(svg, {
-            autoFit: true,
-            spacingVertical: 80,
-            spacingHorizontal: 180,
-          }, root);
-        } else {
-          mm.setData(root); mm.fit();
-        }
+        if (!mm) { mm = Markmap.create(svg, { autoFit: true, spacingVertical: 80, spacingHorizontal: 180 }, root);
+        } else { mm.setData(root); mm.fit(); }
       });
-
       const setupBtn = (id, fn) => {
-        const b = document.getElementById(id);
-        b.addEventListener('click', (e) => {
+        document.getElementById(id).addEventListener('click', (e) => {
           e.preventDefault(); e.stopPropagation(); fn();
         }, true);
       };
-
       setupBtn('zin', () => mm.rescale(1.3));
       setupBtn('zout', () => mm.rescale(0.7));
       setupBtn('res', () => mm.fit());
       setupBtn('cls', () => window.parent.postMessage({type:'VAT_CLOSE'}, '*'));
-
       window.parent.postMessage({ type: 'VAT_READY' }, '*');
     })();
   </script>
