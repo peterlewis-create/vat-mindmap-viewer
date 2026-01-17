@@ -4,24 +4,31 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
+
   <style>
     :root { --bg:#0b0f14; --text:#ffffff; }
+
     html, body {
-      height: 100%; margin: 0; background: var(--bg);
-      overflow: hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      overflow: hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       color: var(--text);
     }
+
     #svg { width: 100vw; height: 100vh; display: block; }
 
     /* Header */
     #header { position: fixed; top: 22px; left: 22px; z-index: 999; pointer-events: none; }
-    #title { font-size: 28px; font-weight: 900; margin: 0; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
-    #subtitle { font-size: 14px; color: rgba(255,255,255,0.8); margin-top: 6px; }
+    #title { font-size: 30px; font-weight: 900; margin: 0; color:#fff; text-shadow: 0 2px 12px rgba(0,0,0,0.9); }
+    #subtitle { font-size: 14px; margin-top: 6px; color: rgba(255,255,255,0.85); }
 
     /* Toolbar */
     #toolbar {
-      position: fixed; top: 22px; right: 22px; z-index: 1000;
-      display: flex; gap: 10px; pointer-events: auto;
+      position: fixed; top: 22px; right: 22px;
+      z-index: 1000; display: flex; gap: 10px;
+      pointer-events: auto;
     }
     .tb-btn {
       background: #1f2937;
@@ -37,36 +44,59 @@
       user-select: none;
     }
     .tb-btn.text-btn { font-size: 14px; padding: 0 16px; width: auto; }
-    .tb-btn:hover { background: #374151; border-color: #fff; }
+    .tb-btn:hover { background:#374151; border-color:#fff; }
 
-    /* Box readability */
+    /* Links */
+    .markmap-link { stroke: rgba(255,255,255,0.40) !important; stroke-width: 2.5px !important; }
+
+    /* === TEXT READABILITY (critical) ===
+       Markmap can render text via SVG <text> OR via foreignObject.
+       We force BOTH to be large + white + outlined.
+    */
+    /* SVG text */
+    .markmap text,
+    .markmap .markmap-node text,
+    .markmap .markmap-node-text {
+      fill: #ffffff !important;
+      font-size: 20px !important;
+      font-weight: 900 !important;
+      paint-order: stroke !important;
+      stroke: rgba(0,0,0,0.95) !important;
+      stroke-width: 5px !important;
+      stroke-linejoin: round !important;
+    }
+
+    /* foreignObject text */
+    .markmap foreignObject,
+    .markmap foreignObject * {
+      color: #ffffff !important;
+      font-size: 20px !important;
+      font-weight: 900 !important;
+    }
+
+    /* Box readability (if foreignObject boxes are used) */
     .markmap-foreign {
       background: #111827 !important;
       border: 2px solid #3b82f6 !important;
       border-radius: 10px !important;
       padding: 12px 20px !important;
-      color: #ffffff !important;
-      font-weight: 900 !important;
-      font-size: 16px !important;
-      box-shadow: 0 10px 24px rgba(0,0,0,0.65);
-      white-space: nowrap;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.65) !important;
+      white-space: nowrap !important;
     }
-    .markmap-foreign div { color: #ffffff !important; }
-    .markmap-link { stroke: rgba(255,255,255,0.40) !important; stroke-width: 2.5px !important; }
   </style>
 </head>
 
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle" id="lvl">Expand level: 2</div>
+    <div id="subtitle" id="lvl">Expand level: 2 (click a node to magnify)</div>
   </div>
 
   <div id="toolbar">
-    <button class="tb-btn" id="plus"  type="button" title="Expand one level">+</button>
-    <button class="tb-btn" id="minus" type="button" title="Collapse one level">−</button>
-    <button class="tb-btn text-btn" id="fit"   type="button">Resize</button>
-    <button class="tb-btn text-btn" id="close" type="button">Close</button>
+    <button class="tb-btn" id="plus"  type="button" title="Show one more level">+</button>
+    <button class="tb-btn" id="minus" type="button" title="Hide one level">−</button>
+    <button class="tb-btn text-btn" id="fit"  type="button" title="Fit to screen">Resize</button>
+    <button class="tb-btn text-btn" id="close" type="button" title="Close">Close</button>
   </div>
 
   <svg id="svg" class="markmap"></svg>
@@ -83,27 +113,24 @@
 
       let mm = null;
       let baseRoot = null;
-      let expandLevel = 2; // show first 2 levels by default
+      let expandLevel = 2;
 
       function clone(obj) {
         if (typeof structuredClone === 'function') return structuredClone(obj);
         return JSON.parse(JSON.stringify(obj));
       }
 
+      // Collapse children starting at maxDepth (depth 0 = root)
       function applyFoldByDepth(node, depth, maxDepth) {
-        // Collapse children starting at maxDepth (depth 0 = root)
-        if (!node || !node.children) return;
-
+        if (!node) return;
         if (!node.payload) node.payload = {};
+        if (!node.children || !node.children.length) return;
 
         if (depth >= maxDepth) {
-          // This node stays visible, but its children are hidden
           node.payload.fold = 1;
         } else {
           node.payload.fold = 0;
-          for (const child of node.children) {
-            applyFoldByDepth(child, depth + 1, maxDepth);
-          }
+          for (const child of node.children) applyFoldByDepth(child, depth + 1, maxDepth);
         }
       }
 
@@ -119,15 +146,74 @@
             spacingVertical: 60,
             spacingHorizontal: 160,
           }, root);
+          wireNodeMagnify();  // attach click handlers after first render
         } else {
           mm.setData(root);
           mm.fit();
+          wireNodeMagnify();  // re-attach because nodes get re-rendered
         }
 
         const lvl = document.getElementById('lvl');
-        if (lvl) lvl.textContent = 'Expand level: ' + expandLevel;
+        if (lvl) lvl.textContent = 'Expand level: ' + expandLevel + ' (click a node to magnify)';
       }
 
+      // === Magnify & center clicked node ===
+      function zoomToNodeElement(nodeEl, strength) {
+        if (!mm || !mm.zoom) return;
+
+        const svgRect = svg.getBoundingClientRect();
+        const nodeRect = nodeEl.getBoundingClientRect();
+
+        // Node center in screen coords relative to SVG origin
+        const cx = (nodeRect.left + nodeRect.right) / 2 - svgRect.left;
+        const cy = (nodeRect.top + nodeRect.bottom) / 2 - svgRect.top;
+
+        // Current zoom transform
+        const t = d3.zoomTransform(svg);
+
+        // Convert screen center -> graph coords
+        const p = t.invert([cx, cy]); // p is in the unscaled graph coordinate space
+
+        // Target scale (magnify)
+        const k2 = Math.max(1, Math.min(6, t.k * strength));
+
+        // Center the clicked node
+        const x2 = (svgRect.width  / 2) - (p[0] * k2);
+        const y2 = (svgRect.height / 2) - (p[1] * k2);
+
+        const tr = d3.zoomIdentity.translate(x2, y2).scale(k2);
+
+        d3.select(svg)
+          .transition()
+          .duration(220)
+          .call(mm.zoom.transform, tr);
+      }
+
+      function wireNodeMagnify() {
+        // markmap nodes are rendered as g elements; we attach to any group that looks like a node
+        const sel = d3.select(svg).selectAll('g');
+        sel.style('cursor', function () {
+          // only show pointer cursor for node-ish groups (those that contain text)
+          const hasText = this.querySelector('text') || this.querySelector('foreignObject');
+          return hasText ? 'pointer' : null;
+        });
+
+        sel.on('click.vatFocus', null); // clear previous handler
+
+        sel.on('click.vatFocus', function(event) {
+          const isNode = this.querySelector('text') || this.querySelector('foreignObject');
+          if (!isNode) return;
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          // If user is at level 4+ they want strong magnify; otherwise moderate
+          const strength = (expandLevel >= 4) ? 1.8 : 1.45;
+          zoomToNodeElement(this, strength);
+        });
+      }
+
+      // Receive markdown from Squarespace
       window.addEventListener('message', (ev) => {
         if (!ev.data || ev.data.type !== 'VAT_SET') return;
 
@@ -143,7 +229,6 @@
       function safe(fn){
         return function(e){
           e.preventDefault(); e.stopPropagation();
-          if (!mm && fn !== render) return;
           fn();
         };
       }
@@ -165,6 +250,12 @@
       document.getElementById('close').addEventListener('click', safe(() => {
         window.parent.postMessage({ type: 'VAT_CLOSE' }, '*');
       }), true);
+
+      // Click empty background => fit (handy after magnify)
+      svg.addEventListener('click', (e) => {
+        // if they clicked an actual node, the handler above stops propagation
+        if (mm) mm.fit();
+      });
 
       window.parent.postMessage({ type: 'VAT_READY' }, '*');
     })();
