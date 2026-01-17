@@ -34,6 +34,7 @@
       padding:9px 10px;
       font:850 12px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
       cursor:pointer;
+      white-space:nowrap;
     }
     #uiBar button:hover{ background:rgba(255,255,255,.10); }
     #uiBar .sep{ width:1px; height:22px; background:rgba(255,255,255,.14); margin:0 2px; }
@@ -98,6 +99,7 @@
     <button id="readable" type="button">Readable</button>
     <div class="sep"></div>
     <button id="reset" type="button">Reset</button>
+    <button id="closeBtn" type="button">Close</button>
   </div>
 
   <svg id="mm"></svg>
@@ -118,13 +120,11 @@
 
       let mm = null;
       let initialRoot = null;
-      let liveRoot = null;
 
       let lastHash = "";
       let lastLen = 0;
 
       function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
-
       function hashStr(s){
         let h = 0;
         for (let i=0; i<s.length; i++){
@@ -133,13 +133,11 @@
         }
         return String(h);
       }
-
       function decodeHtmlEntities(str){
         const t = document.createElement("textarea");
         t.innerHTML = String(str || "");
         return t.value;
       }
-
       function setHeaderFrom(titleText){
         hdrTitleEl.textContent = decodeHtmlEntities(titleText || "").trim() || "UK VAT Taxonomy";
         const sources = params.get("sources");
@@ -152,7 +150,6 @@
         if (depth >= showDepth - 1 && node.children && node.children.length) node.payload.fold = 1;
         if (node.children) node.children.forEach(ch => foldFrom(ch, depth+1, showDepth));
       }
-
       function collapseBeyond(node, depth, maxDepth){
         if (!node) return;
         node.payload ||= {};
@@ -160,16 +157,13 @@
         if (node.children) node.children.forEach(ch => collapseBeyond(ch, depth+1, maxDepth));
       }
 
-      function currentZoom(){
-        try { return d3.zoomTransform(svg).k || 1; } catch(e) { return 1; }
-      }
-
       async function fitClamped(maxZoom){
         if (!mm) return;
         try { await mm.fit(1.02); } catch(e) {}
+        // If fit zooms too far in, gently back it off
         try {
-          const k = currentZoom();
-          if (k > maxZoom) await mm.rescale(maxZoom);
+          const k = (mm.state && mm.state.transform && mm.state.transform.k) ? mm.state.transform.k : 1;
+          if (k > maxZoom) await mm.rescale(maxZoom / k);   // rescale is MULTIPLIER
         } catch(e) {}
       }
 
@@ -206,19 +200,23 @@
           if (pill.dataset.vatBound === "1") return;
           pill.dataset.vatBound = "1";
 
+          function rerender(){
+            // IMPORTANT: re-render from the live tree markmap is using
+            const live = (mm && mm.state && mm.state.data) ? mm.state.data : null;
+            if (!live) return;
+            mm.setData(live);
+            setTimeout(async ()=>{
+              decorateAndBind();
+              await fitClamped(1.10);
+              decorateAndBind();
+            }, 35);
+          }
+
           function toggle(){
             if (!hasChildren) return;
             inode.data.payload ||= {};
             inode.data.payload.fold = (inode.data.payload.fold === 1) ? 0 : 1;
-
-            mm.setData(liveRoot);
-
-            setTimeout(async ()=>{
-              decorateAndBind();
-              // Allow more zoom when deeper expands, but prevent huge zoom when shallow
-              await fitClamped(1.10);
-              decorateAndBind();
-            }, 35);
+            rerender();
           }
 
           exp.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); if (!hasChildren) return; toggle(); });
@@ -237,7 +235,6 @@
         collapseBeyond(root, 0, MAX_LEVEL);
 
         initialRoot = deepClone(root);
-        liveRoot = deepClone(root);
 
         const opts = {
           autoFit:false,
@@ -256,45 +253,46 @@
         };
 
         if (!mm) {
-          mm = Markmap.create(svg, opts, liveRoot);
+          mm = Markmap.create(svg, opts, root);
 
+          // Zoom: rescale is MULTIPLIER in your build
           document.getElementById("zoomIn").addEventListener("click", async ()=>{
-            const k = currentZoom();
-            try { await mm.rescale(k * 1.15); } catch(e) {}
+            try { await mm.rescale(1.15); } catch(e) {}
           });
           document.getElementById("zoomOut").addEventListener("click", async ()=>{
-            const k = currentZoom();
-            try { await mm.rescale(Math.max(0.2, k / 1.15)); } catch(e) {}
+            try { await mm.rescale(1/1.15); } catch(e) {}
           });
 
           document.getElementById("overview").addEventListener("click", async ()=>{ await fitClamped(1.10); });
 
           document.getElementById("readable").addEventListener("click", async ()=>{
-            const k = currentZoom();
-            try { await mm.rescale(Math.max(k, 1.15)); } catch(e) {}
+            try { await mm.rescale(1.15); } catch(e) {}
           });
 
           document.getElementById("reset").addEventListener("click", async ()=>{
-            liveRoot = deepClone(initialRoot);
-            mm.setData(liveRoot);
+            mm.setData(deepClone(initialRoot));
             setTimeout(async ()=>{
               decorateAndBind();
               await fitClamped(1.10);
               decorateAndBind();
             }, 35);
           });
+
+          document.getElementById("closeBtn").addEventListener("click", ()=>{
+            try { window.parent && window.parent.postMessage({ type:"VAT_CLOSE" }, "*"); } catch(e) {}
+            // If not embedded, just go back (harmless if no history)
+            try { if (window === window.top) history.back(); } catch(e) {}
+          });
+
         } else {
           mm.setOptions(opts);
-          mm.setData(liveRoot);
+          mm.setData(root);
         }
 
         setTimeout(async ()=>{
           decorateAndBind();
-          // IMPORTANT: clamp prevents giant zoom when only 2 nodes visible
           await fitClamped(1.10);
           decorateAndBind();
-
-          // Tell parent we are loaded (stops retry logic)
           try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_ACK" }, "*"); } catch(e) {}
         }, 60);
       }
@@ -320,7 +318,6 @@
 
           const h = hashStr(md);
           if (h === lastHash && md.length === lastLen) {
-            // Duplicate: just ACK (prevents shudder)
             try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_ACK" }, "*"); } catch(e) {}
             return;
           }
@@ -329,11 +326,9 @@
 
           renderMarkdown(md);
         }
-
-        if (type === "FIT") fitClamped(1.10);
       });
 
-      // Handshake: tell parent we are ready (so parent posts ONCE)
+      // handshake
       try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_READY" }, "*"); } catch(e) {}
     })();
   </script>
