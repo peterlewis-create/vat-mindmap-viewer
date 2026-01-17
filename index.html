@@ -8,12 +8,14 @@
     :root{
       --bg:#2f3136;
       --text:#fff;
-      --muted: rgba(255,255,255,.75);
+      --muted: rgba(255,255,255,.78);
       --node:#3a3f46;
       --link: rgba(255,255,255,.22);
     }
-    html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;}
+    html,body{
+      height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
     #svg{width:100vw;height:100vh;display:block;background:var(--bg);}
 
     #header{position:fixed;top:18px;left:18px;z-index:9999;pointer-events:none;}
@@ -26,7 +28,8 @@
       border: 1px solid rgba(255,255,255,.22);
       color:#fff;height:40px;min-width:40px;border-radius:10px;font-weight:800;cursor:pointer;
       display:flex;align-items:center;justify-content:center;
-      box-shadow:0 10px 24px rgba(0,0,0,.35); user-select:none;
+      box-shadow:0 10px 24px rgba(0,0,0,.35);
+      user-select:none;
     }
     .btn.text{padding:0 14px;min-width:auto;font-size:13px;}
 
@@ -37,12 +40,12 @@
       padding: 10px 12px;
       border-radius: 10px;
       font-size: 13px;
-      color: rgba(255,255,255,.82);
-      max-width: 75vw;
+      color: rgba(255,255,255,.86);
+      max-width: 78vw;
       pointer-events:none;
     }
 
-    /* LLM-like: compact but readable */
+    /* Compact, LLM-like */
     .markmap-foreign{
       background: var(--node) !important;
       border-radius: 10px !important;
@@ -91,11 +94,13 @@
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
     }
 
-    function getQS(name){
-      try{
-        const v = new URLSearchParams(location.search).get(name);
-        return v || '';
-      } catch(e){ return ''; }
+    function svgSize(){
+      return { w: svg.clientWidth || window.innerWidth, h: svg.clientHeight || window.innerHeight };
+    }
+
+    function qs(name){
+      try { return (new URLSearchParams(location.search).get(name) || ''); }
+      catch(e){ return ''; }
     }
 
     if (!window.markmap || !window.markmap.Transformer || !window.markmap.Markmap){
@@ -111,69 +116,102 @@
     let fullRoot = null;
     let fullDepth = 2;
 
-    let focusNode = null;   // store MARKMAP node (d.data)
+    let focusNode = null;   // store markmap node (d.data)
     let focusDepth = 5;
 
-    // Current manual transform (we do NOT use mm.fit at all)
+    // Manual transform
     let curScale = 1, curTx = 0, curTy = 0;
 
-    function svgSize(){
-      return { w: svg.clientWidth || window.innerWidth, h: svg.clientHeight || window.innerHeight };
-    }
-
-    function pickGroup(){
-      // markmap-view creates groups; first <g> works reliably
-      return svg.querySelector('g') || null;
-    }
-
     function applyTransform(){
-      const g = pickGroup();
+      const g = pickRootGroup();
       if (!g) return false;
       g.setAttribute('transform', `translate(${curTx},${curTy}) scale(${curScale})`);
       return true;
     }
 
-    function hardFitOnce(){
-      const g = pickGroup();
-      const { w, h } = svgSize();
-      if (!g || !w || !h) return false;
+    // CRITICAL FIX: pick the group that actually contains the markmap nodes
+    function pickRootGroup(){
+      // Prefer known class if present
+      const gMark = svg.querySelector('g.markmap');
+      if (gMark) return gMark;
 
-      let bb;
-      try { bb = g.getBBox(); } catch(e) { return false; }
-      if (!bb || !isFinite(bb.width) || !isFinite(bb.height) || bb.width < 10 || bb.height < 10) return false;
+      // Find any node/link and walk up to the topmost <g> under the svg
+      const any = svg.querySelector('g.markmap-node, path.markmap-link, circle');
+      if (!any) return svg.querySelector('g');
+
+      let g = any;
+      // climb to a <g>
+      while (g && g.tagName && g.tagName.toLowerCase() !== 'g') g = g.parentNode;
+      if (!g) return svg.querySelector('g');
+
+      // climb to the highest <g> whose parent is still a <g>
+      while (g.parentNode && g.parentNode.tagName && g.parentNode.tagName.toLowerCase() === 'g') {
+        g = g.parentNode;
+      }
+      return g;
+    }
+
+    function unionBBox(elements){
+      let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+      for (const el of elements){
+        let bb;
+        try { bb = el.getBBox(); } catch(e){ continue; }
+        if (!bb || !isFinite(bb.x) || !isFinite(bb.y) || !isFinite(bb.width) || !isFinite(bb.height)) continue;
+        if (bb.width <= 0 || bb.height <= 0) continue;
+        x1 = Math.min(x1, bb.x);
+        y1 = Math.min(y1, bb.y);
+        x2 = Math.max(x2, bb.x + bb.width);
+        y2 = Math.max(y2, bb.y + bb.height);
+      }
+      if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return null;
+      const w = x2 - x1, h = y2 - y1;
+      if (w < 10 || h < 10) return null;
+      return { x: x1, y: y1, width: w, height: h };
+    }
+
+    function hardFitOnce(){
+      const { w, h } = svgSize();
+      if (!w || !h) return false;
+
+      const g = pickRootGroup();
+      if (!g) return false;
+
+      // First try bbox of the root group
+      let bb = null;
+      try { bb = g.getBBox(); } catch(e){ bb = null; }
+      if (!bb || !isFinite(bb.width) || !isFinite(bb.height) || bb.width < 10 || bb.height < 10){
+        // Fallback: union bbox over actual nodes/links
+        const els = Array.from(svg.querySelectorAll('g.markmap-node, path.markmap-link, circle'));
+        bb = unionBBox(els);
+      }
+      if (!bb) return false;
 
       const pad = 40;
       const sx = (w - pad*2) / bb.width;
       const sy = (h - pad*2) / bb.height;
-      const s = Math.max(0.05, Math.min(sx, sy)); // never zero/NaN
+      const s = Math.max(0.05, Math.min(sx, sy));
 
       curScale = s;
       curTx = (w - bb.width * s)/2 - bb.x * s;
       curTy = (h - bb.height * s)/2 - bb.y * s;
-
       return applyTransform();
     }
 
     function hardFitRetry(){
-      // retry until bbox exists (foreignObject needs a moment)
       let tries = 0;
       const timer = setInterval(() => {
         tries++;
         const ok = hardFitOnce();
-        if (ok || tries >= 35) clearInterval(timer);
-        if (tries === 35 && !ok) {
-          status.textContent = "Fit failed (bbox not ready). Try refresh (hard reload).";
+        if (ok){
+          clearInterval(timer);
+          return;
         }
-      }, 80);
-    }
-
-    function zoom(factor){
-      const { w, h } = svgSize();
-      const cx = w/2, cy = h/2;
-      curTx = cx - (cx - curTx) * factor;
-      curTy = cy - (cy - curTy) * factor;
-      curScale = Math.max(0.05, Math.min(curScale * factor, 6));
-      applyTransform();
+        if (tries >= 45){
+          clearInterval(timer);
+          const nodes = svg.querySelectorAll('g.markmap-node').length;
+          status.textContent = `Fit failed. Nodes found: ${nodes}. (This usually means we were fitting the wrong SVG group — now fixed — but the SVG still has no measurable bbox.)`;
+        }
+      }, 90);
     }
 
     function clonePruned(node, maxDepth, depthNow){
@@ -200,8 +238,8 @@
         mm = Markmap.create(svg, {
           autoFit: false,
           duration: 0,
-          spacingHorizontal: 95,
-          spacingVertical: 18
+          spacingHorizontal: 90,  // compact like the LLM layout
+          spacingVertical: 16
         }, rootToShow);
       } else {
         mm.setData(rootToShow);
@@ -223,7 +261,6 @@
         } catch(e){}
       }, 120);
 
-      // manual fit (with retries)
       hardFitRetry();
 
       setTimeout(() => {
@@ -234,7 +271,7 @@
         subline.textContent = focusNode
           ? `Expand level: ${focusDepth} (drilled — Resize to return)`
           : `Expand level: ${fullDepth} (click a node to drill down)`;
-      }, 450);
+      }, 500);
     }
 
     function setMarkdown(md){
@@ -285,7 +322,7 @@
     });
 
     // Querystring fallback
-    const mdFromQS = getQS('md');
+    const mdFromQS = qs('md');
     if (mdFromQS) setMarkdown(mdFromQS);
 
     // Handshake
