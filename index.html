@@ -7,15 +7,26 @@
 
   <style>
     html, body { height:100%; margin:0; }
-    body{ background:#0b0f16; overflow:hidden; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+    body{
+      background:#0b0f16;
+      overflow:hidden;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    }
     #mm{ width:100vw; height:100vh; display:block; background:#0b0f16; }
+
+    g.markmap-node, g.markmap-node foreignObject, .markmap-foreign { pointer-events:auto !important; }
     .markmap-link{ opacity:0.40; }
     foreignObject{ overflow:visible !important; }
 
-    #hdr{ position:fixed; left:18px; top:16px; z-index:30; pointer-events:none; }
+    /* Header (NotebookLM-like) */
+    #hdr{
+      position:fixed; left:18px; top:16px;
+      z-index:30; pointer-events:none;
+    }
     #hdrTitle{ font-size:22px; font-weight:850; color:rgba(255,255,255,.96); margin:0 0 6px 0; }
     #hdrSub{ font-size:13px; font-weight:650; color:rgba(255,255,255,.62); margin:0; }
 
+    /* Toolbar */
     #uiBar{
       position:fixed; right:14px; top:14px; z-index:40;
       display:flex; gap:8px; align-items:center;
@@ -41,46 +52,49 @@
 
     /* Node pills */
     .markmap-foreign{
-      display:flex !important; align-items:flex-start; gap:10px;
+      display:flex !important;
+      align-items:center;
+      gap:10px;
       box-sizing:border-box !important;
       padding:10px 12px;
       border-radius:14px;
       background:rgba(55,65,81,0.82);
       border:1px solid rgba(255,255,255,0.12);
       color:rgba(255,255,255,0.96) !important;
-      font-size:15px; font-weight:800; line-height:1.18;
+      font-size:15px;
+      font-weight:800;
+      line-height:1.18;
       text-align:left;
       box-shadow:0 12px 34px rgba(0,0,0,0.28);
       backdrop-filter:blur(7px);
-      width:320px; max-width:320px;
+      width:340px; max-width:340px;
       white-space:normal !important;
-      overflow-wrap:anywhere; word-break:break-word; hyphens:auto;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+      hyphens:auto;
       cursor:pointer;
-      pointer-events:auto;
     }
     .markmap-foreign *{ color:rgba(255,255,255,0.96) !important; }
 
-    /* Root a bit wider, still wraps */
     .mm-depth-0{
-      width:380px !important; max-width:380px !important;
+      width:420px !important; max-width:420px !important;
       font-size:16px !important; font-weight:900 !important;
       padding:12px 14px !important;
     }
 
+    /* Expander button */
     .mm-expander{
       display:inline-flex; align-items:center; justify-content:center;
-      width:22px; height:22px;
+      width:26px; height:26px;
       border-radius:999px;
-      border:1px solid rgba(255,255,255,0.18);
-      background:rgba(0,0,0,0.20);
-      color:rgba(255,255,255,0.90);
-      font-weight:950; font-size:14px;
+      border:1px solid rgba(255,255,255,0.22);
+      background:rgba(0,0,0,0.24);
+      color:rgba(255,255,255,0.92);
+      font-weight:950; font-size:15px;
       flex:0 0 auto;
-      cursor:pointer;
       user-select:none;
-      margin-top:1px;
     }
-    .mm-expander.mm-disabled{ opacity:0.30; cursor:default; }
+    .mm-expander.mm-disabled{ opacity:0.30; }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -110,14 +124,16 @@
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
-      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10)); // show first 2 levels only
-      const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max") || "6", 10));
+
+      // YOU WANT: open at level 2 only
+      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10));
+      const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max") || "10", 10));
 
       const svg = document.getElementById("mm");
       const { Transformer } = window.markmap;
       const { Markmap } = window.markmap;
-      const transformer = new Transformer();
 
+      const transformer = new Transformer();
       const hdrTitleEl = document.getElementById("hdrTitle");
       const hdrSubEl   = document.getElementById("hdrSub");
 
@@ -125,6 +141,8 @@
       let initialData = null;
 
       function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+      function ensurePayload(n){ if (!n.payload || typeof n.payload !== "object") n.payload = {}; return n.payload; }
+      function hasChildren(n){ return !!(n && Array.isArray(n.children) && n.children.length); }
 
       function decodeHtmlEntities(str){
         const t = document.createElement("textarea");
@@ -138,79 +156,45 @@
         hdrSubEl.textContent = sources ? ("Based on " + sources + " sources") : "";
       }
 
-      function ensurePayload(n){
-        if (!n.payload || typeof n.payload !== "object") n.payload = {};
-        return n.payload;
+      // KEY: fold using Markmap payload (keeps children, allows expand/collapse at every node)
+      function setFold(n, fold){
+        const p = ensurePayload(n);
+        p.fold = fold ? 1 : 0;
       }
 
-      // Collapsible storage: children <-> payload._children
-      function stashChildren(n){
-        const p = ensurePayload(n);
-        if (n.children && n.children.length){
-          if (!p._children || !p._children.length) p._children = n.children;
-          n.children = [];
-        }
-      }
-      function restoreChildren(n){
-        const p = ensurePayload(n);
-        if ((!n.children || !n.children.length) && p._children && p._children.length){
-          n.children = p._children;
-          p._children = [];
-        }
-      }
-      function hasKids(n){
-        const p = (n && n.payload) ? n.payload : {};
-        return (n.children && n.children.length) || (p._children && p._children.length);
-      }
-
-      // Collapse to INIT_LEVEL (but keep _children so it’s expandable)
-      function collapseToLevel(n, depth, showDepth){
-        if (!n) return;
+      // Open at 2 levels: fold every node that is at depth >= (INIT_LEVEL - 1)
+      // Example: INIT_LEVEL=2 => fold nodes at depth >=1 (i.e., Level 2 nodes start with "+" if they have children)
+      function applyInitialFolding(n, depth){
         ensurePayload(n);
 
-        if (depth >= showDepth - 1) stashChildren(n);
-        else restoreChildren(n);
+        if (depth >= INIT_LEVEL - 1) setFold(n, true);
+        else setFold(n, false);
 
-        // Recurse through BOTH visible children and stashed children
-        const p = n.payload;
-        (n.children || []).forEach(ch => collapseToLevel(ch, depth + 1, showDepth));
-        (p._children || []).forEach(ch => collapseToLevel(ch, depth + 1, showDepth));
+        (n.children || []).forEach(ch => applyInitialFolding(ch, depth + 1));
       }
 
-      // Hard cap MAX_LEVEL
-      function capMaxDepth(n, depth, maxDepth){
-        if (!n) return;
+      // Optional safety: prevent showing beyond MAX_LEVEL (fold from boundary)
+      function capMaxDepth(n, depth){
         ensurePayload(n);
-
-        if (depth >= maxDepth) stashChildren(n);
-
-        const p = n.payload;
-        (n.children || []).forEach(ch => capMaxDepth(ch, depth + 1, maxDepth));
-        (p._children || []).forEach(ch => capMaxDepth(ch, depth + 1, maxDepth));
+        if (depth >= MAX_LEVEL - 1) setFold(n, true);
+        (n.children || []).forEach(ch => capMaxDepth(ch, depth + 1));
       }
 
       async function fitClamped(maxK){
         if (!mm) return;
         try { await mm.fit(1.02); } catch(e) {}
-        try {
+        try{
           const k = (mm.state && mm.state.transform && mm.state.transform.k) ? mm.state.transform.k : 1;
-          if (k > maxK) await mm.rescale(maxK / k); // rescale = MULTIPLIER
-        } catch(e) {}
+          if (k > maxK) await mm.rescale(maxK / k);
+        }catch(e){}
       }
 
-      function rerender(){
-        const live = (mm && mm.state && mm.state.data) ? mm.state.data : null;
-        if (!live) return;
-        mm.setData(live);
-        setTimeout(()=>{ decorate(); }, 40);
-      }
-
-      function toggleDataNode(d){
-        if (!d) return;
-        ensurePayload(d);
-        if (d.children && d.children.length) stashChildren(d);
-        else restoreChildren(d);
-        rerender();
+      function toggleFold(d){
+        if (!d || !hasChildren(d)) return;
+        const p = ensurePayload(d);
+        p.fold = (p.fold === 1) ? 0 : 1;
+        mm.setData(mm.state.data);
+        setTimeout(()=>decorate(), 40);
       }
 
       function decorate(){
@@ -227,7 +211,6 @@
           pill.classList.remove("mm-depth-0","mm-depth-1","mm-depth-2","mm-depth-3","mm-depth-4","mm-depth-5","mm-depth-6");
           pill.classList.add("mm-depth-" + Math.min(depth, 6));
 
-          // Ensure expander exists
           let exp = pill.querySelector(".mm-expander");
           if (!exp) {
             exp = document.createElement("span");
@@ -235,21 +218,22 @@
             pill.prepend(exp);
           }
 
-          const kids = hasKids(d);
+          const kids = hasChildren(d);
+          const folded = (d.payload && d.payload.fold === 1);
+
           if (!kids){
             exp.classList.add("mm-disabled");
             exp.textContent = "•";
           } else {
             exp.classList.remove("mm-disabled");
-            exp.textContent = (d.children && d.children.length) ? "−" : "+";
+            exp.textContent = folded ? "+" : "−";
           }
 
           if (pill.dataset.vatBound === "1") return;
           pill.dataset.vatBound = "1";
 
-          // Click pill OR expander toggles
-          exp.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); if (!hasKids(d)) return; toggleDataNode(d); });
-          pill.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); if (!hasKids(d)) return; toggleDataNode(d); });
+          exp.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); toggleFold(d); });
+          pill.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); toggleFold(d); });
         });
       }
 
@@ -260,8 +244,9 @@
         const { root } = transformer.transform(clean);
         setHeaderFrom(root && root.content ? root.content : "");
 
-        collapseToLevel(root, 0, INIT_LEVEL);
-        capMaxDepth(root, 0, MAX_LEVEL);
+        // OPEN AT LEVEL 2 ONLY + expand/collapse stepwise from there
+        applyInitialFolding(root, 0);
+        capMaxDepth(root, 0);
 
         initialData = deepClone(root);
 
@@ -270,12 +255,12 @@
           pan:true,
           zoom:true,
           scrollForPan:true,
-          duration:0,                 // reduce “shudder”
-          spacingHorizontal: 220,     // aligns levels into clear columns
-          spacingVertical: 150,
+          duration:0,
+          spacingHorizontal: 240,
+          spacingVertical: 160,
           paddingX: 18,
           nodeMinHeight: 26,
-          maxWidth: 560,
+          maxWidth: 650,
           color: () => "rgba(148,163,184,0.60)",
           lineWidth: () => 1.2
         };
@@ -283,7 +268,7 @@
         if (!mm) {
           mm = Markmap.create(svg, opts, root);
 
-          // Zoom buttons: rescale is MULTIPLIER (this fixes "-" behaving wrong)
+          // Zoom buttons (multiplier)
           document.getElementById("zoomIn").addEventListener("click", async ()=>{ try{ await mm.rescale(1.15); }catch(e){} });
           document.getElementById("zoomOut").addEventListener("click", async ()=>{ try{ await mm.rescale(1/1.15); }catch(e){} });
 
@@ -309,7 +294,7 @@
           await fitClamped(1.05);
           decorate();
           try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_ACK" }, "*"); } catch(e) {}
-        }, 60);
+        }, 70);
       }
 
       function extractMarkdown(data){
@@ -323,7 +308,6 @@
         return "";
       }
 
-      // Listen for markdown from Squarespace
       window.addEventListener("message", (event)=>{
         const d = event.data || {};
         if (d.type === "VAT_MINDMAP_MD" || d.type === "MARKDOWN" || d.type === "MD" || !d.type) {
@@ -332,7 +316,6 @@
         }
       });
 
-      // Handshake so parent only posts when viewer ready
       try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_READY" }, "*"); } catch(e) {}
     })();
   </script>
