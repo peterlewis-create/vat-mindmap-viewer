@@ -24,29 +24,26 @@
     #wrap { position:fixed; inset:0; }
     svg.markmap { width:100%; height:100%; }
 
-    /* Make node labels readable (Markmap uses foreignObject HTML) */
+    /* Node labels (foreignObject HTML) */
     .markmap-foreign, foreignObject > div {
-      font: 600 var(--vat-node-font)/1.15 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font: 650 var(--vat-node-font)/1.15 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       color: var(--vat-node-text) !important;
       background: var(--vat-node-bg);
       border: 1px solid var(--vat-node-border);
       border-radius: 12px;
       padding: 6px 10px;
       box-shadow: 0 10px 24px rgba(0,0,0,.35);
-      max-width: 360px;
+      max-width: 380px;
       white-space: normal;
     }
-    .markmap-foreign a, foreignObject > div a { color: var(--vat-node-text); text-decoration: none; }
 
-    /* Links + dots */
     .markmap-link { stroke: var(--vat-link) !important; }
     circle { fill: var(--vat-dot) !important; }
 
-    /* Small status overlay (optional, but helpful) */
     #status{
       position:fixed; left:12px; bottom:12px;
       color: rgba(255,255,255,.75);
-      font: 500 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font: 600 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       padding: 8px 10px;
       border: 1px solid rgba(255,255,255,.10);
       border-radius: 10px;
@@ -85,7 +82,6 @@
         return m;
       }
 
-      // Show levels 0..depth, by folding nodes at that depth
       function applyFoldToDepth(node, d, depth){
         node.payload = node.payload || {};
         if (d >= depth) {
@@ -104,7 +100,7 @@
         const { root } = transformer.transform(md);
         maxDepth = computeMaxDepth(root, 0);
 
-        const target = Math.max(1, Math.min(depth || currentDepth, maxDepth));
+        const target = Math.max(1, Math.min(Number(depth || currentDepth), maxDepth));
         currentDepth = target;
 
         applyFoldToDepth(root, 0, target);
@@ -113,7 +109,6 @@
         setStatus(`Depth ${currentDepth}/${maxDepth}`);
       }
 
-      // PostMessage protocol
       function isValidMsg(x){
         return x && typeof x === 'object' && x.channel === 'vat-mindmap';
       }
@@ -123,21 +118,13 @@
         if (!isValidMsg(msg)) return;
 
         try{
-          if (msg.type === 'setMarkdown') {
-            render(msg.markdown, currentDepth);
-          }
-          if (msg.type === 'collapseTo') {
-            render(lastMarkdown, Number(msg.depth || 2));
-          }
-          if (msg.type === 'expandOne') {
-            render(lastMarkdown, currentDepth + 1);
-          }
-          if (msg.type === 'collapseOne') {
-            render(lastMarkdown, currentDepth - 1);
-          }
-          if (msg.type === 'fit') {
-            mm.fit();
-          }
+          if (msg.type === 'setMarkdown') render(msg.markdown, currentDepth);
+          if (msg.type === 'collapseTo') render(lastMarkdown, Number(msg.depth || 2));
+          if (msg.type === 'expandOne') render(lastMarkdown, currentDepth + 1);
+          if (msg.type === 'collapseOne') render(lastMarkdown, currentDepth - 1);
+
+          if (msg.type === 'fit') mm.fit();
+
           if (msg.type === 'setFontScale') {
             const scale = Math.max(0.85, Math.min(1.6, Number(msg.scale || 1)));
             const base = 18;
@@ -150,10 +137,8 @@
         }
       });
 
-      // Initial render (so the page is never blank)
       render(lastMarkdown, currentDepth);
 
-      // Tell parent we're ready
       try{
         window.parent && window.parent.postMessage({ channel:'vat-mindmap', type:'ready' }, '*');
       }catch(_){}
