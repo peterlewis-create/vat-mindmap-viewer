@@ -39,29 +39,31 @@
     #uiBar button:hover{ background:rgba(255,255,255,.10); }
     #uiBar .sep{ width:1px; height:22px; background:rgba(255,255,255,.14); margin:0 2px; }
 
+    /* Node pills */
     .markmap-foreign{
-      display:flex !important; align-items:center; gap:10px;
+      display:flex !important; align-items:flex-start; gap:10px;
       box-sizing:border-box !important;
       padding:10px 12px;
       border-radius:14px;
       background:rgba(55,65,81,0.82);
       border:1px solid rgba(255,255,255,0.12);
       color:rgba(255,255,255,0.96) !important;
-      font-size:16px; font-weight:800; line-height:1.18;
+      font-size:15px; font-weight:800; line-height:1.18;
       text-align:left;
       box-shadow:0 12px 34px rgba(0,0,0,0.28);
       backdrop-filter:blur(7px);
-      width:340px; max-width:340px;
+      width:320px; max-width:320px;
       white-space:normal !important;
       overflow-wrap:anywhere; word-break:break-word; hyphens:auto;
       cursor:pointer;
+      pointer-events:auto;
     }
     .markmap-foreign *{ color:rgba(255,255,255,0.96) !important; }
 
-    .mm-depth-0, .mm-depth-1{
-      width:auto !important; max-width:none !important;
-      white-space:nowrap !important;
-      font-size:17px !important; font-weight:850 !important;
+    /* Root a bit wider, still wraps */
+    .mm-depth-0{
+      width:380px !important; max-width:380px !important;
+      font-size:16px !important; font-weight:900 !important;
       padding:12px 14px !important;
     }
 
@@ -71,13 +73,14 @@
       border-radius:999px;
       border:1px solid rgba(255,255,255,0.18);
       background:rgba(0,0,0,0.20);
-      color:rgba(255,255,255,0.88);
+      color:rgba(255,255,255,0.90);
       font-weight:950; font-size:14px;
       flex:0 0 auto;
       cursor:pointer;
       user-select:none;
+      margin-top:1px;
     }
-    .mm-expander.mm-disabled{ opacity:0.35; cursor:default; }
+    .mm-expander.mm-disabled{ opacity:0.30; cursor:default; }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -107,7 +110,7 @@
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
-      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10));
+      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10)); // show first 2 levels only
       const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max") || "6", 10));
 
       const svg = document.getElementById("mm");
@@ -119,108 +122,134 @@
       const hdrSubEl   = document.getElementById("hdrSub");
 
       let mm = null;
-      let initialRoot = null;
+      let initialData = null;
 
-      let lastHash = "";
-      let lastLen = 0;
+      function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 
-      function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
-      function hashStr(s){
-        let h = 0;
-        for (let i=0; i<s.length; i++){
-          h = ((h << 5) - h) + s.charCodeAt(i);
-          h |= 0;
-        }
-        return String(h);
-      }
       function decodeHtmlEntities(str){
         const t = document.createElement("textarea");
         t.innerHTML = String(str || "");
         return t.value;
       }
+
       function setHeaderFrom(titleText){
         hdrTitleEl.textContent = decodeHtmlEntities(titleText || "").trim() || "UK VAT Taxonomy";
         const sources = params.get("sources");
         hdrSubEl.textContent = sources ? ("Based on " + sources + " sources") : "";
       }
 
-      function foldFrom(node, depth, showDepth){
-        if (!node) return;
-        node.payload ||= {};
-        if (depth >= showDepth - 1 && node.children && node.children.length) node.payload.fold = 1;
-        if (node.children) node.children.forEach(ch => foldFrom(ch, depth+1, showDepth));
-      }
-      function collapseBeyond(node, depth, maxDepth){
-        if (!node) return;
-        node.payload ||= {};
-        if (depth >= maxDepth) node.payload.fold = 1;
-        if (node.children) node.children.forEach(ch => collapseBeyond(ch, depth+1, maxDepth));
+      function ensurePayload(n){
+        if (!n.payload || typeof n.payload !== "object") n.payload = {};
+        return n.payload;
       }
 
-      async function fitClamped(maxZoom){
+      // Collapsible storage: children <-> payload._children
+      function stashChildren(n){
+        const p = ensurePayload(n);
+        if (n.children && n.children.length){
+          if (!p._children || !p._children.length) p._children = n.children;
+          n.children = [];
+        }
+      }
+      function restoreChildren(n){
+        const p = ensurePayload(n);
+        if ((!n.children || !n.children.length) && p._children && p._children.length){
+          n.children = p._children;
+          p._children = [];
+        }
+      }
+      function hasKids(n){
+        const p = (n && n.payload) ? n.payload : {};
+        return (n.children && n.children.length) || (p._children && p._children.length);
+      }
+
+      // Collapse to INIT_LEVEL (but keep _children so it’s expandable)
+      function collapseToLevel(n, depth, showDepth){
+        if (!n) return;
+        ensurePayload(n);
+
+        if (depth >= showDepth - 1) stashChildren(n);
+        else restoreChildren(n);
+
+        // Recurse through BOTH visible children and stashed children
+        const p = n.payload;
+        (n.children || []).forEach(ch => collapseToLevel(ch, depth + 1, showDepth));
+        (p._children || []).forEach(ch => collapseToLevel(ch, depth + 1, showDepth));
+      }
+
+      // Hard cap MAX_LEVEL
+      function capMaxDepth(n, depth, maxDepth){
+        if (!n) return;
+        ensurePayload(n);
+
+        if (depth >= maxDepth) stashChildren(n);
+
+        const p = n.payload;
+        (n.children || []).forEach(ch => capMaxDepth(ch, depth + 1, maxDepth));
+        (p._children || []).forEach(ch => capMaxDepth(ch, depth + 1, maxDepth));
+      }
+
+      async function fitClamped(maxK){
         if (!mm) return;
         try { await mm.fit(1.02); } catch(e) {}
-        // If fit zooms too far in, gently back it off
         try {
           const k = (mm.state && mm.state.transform && mm.state.transform.k) ? mm.state.transform.k : 1;
-          if (k > maxZoom) await mm.rescale(maxZoom / k);   // rescale is MULTIPLIER
+          if (k > maxK) await mm.rescale(maxK / k); // rescale = MULTIPLIER
         } catch(e) {}
       }
 
-      function decorateAndBind(){
+      function rerender(){
+        const live = (mm && mm.state && mm.state.data) ? mm.state.data : null;
+        if (!live) return;
+        mm.setData(live);
+        setTimeout(()=>{ decorate(); }, 40);
+      }
+
+      function toggleDataNode(d){
+        if (!d) return;
+        ensurePayload(d);
+        if (d.children && d.children.length) stashChildren(d);
+        else restoreChildren(d);
+        rerender();
+      }
+
+      function decorate(){
         svg.querySelectorAll("g.markmap-node").forEach(g=>{
           const inode = g.__data__;
           if (!inode || !inode.data) return;
 
+          const d = inode.data;
           const depth = typeof inode.depth === "number" ? inode.depth : 0;
+
           const pill = g.querySelector(".markmap-foreign");
           if (!pill) return;
 
           pill.classList.remove("mm-depth-0","mm-depth-1","mm-depth-2","mm-depth-3","mm-depth-4","mm-depth-5","mm-depth-6");
           pill.classList.add("mm-depth-" + Math.min(depth, 6));
 
-          const hasChildren = inode.data.children && inode.data.children.length;
-
+          // Ensure expander exists
           let exp = pill.querySelector(".mm-expander");
           if (!exp) {
             exp = document.createElement("span");
             exp.className = "mm-expander";
-            pill.appendChild(exp);
+            pill.prepend(exp);
           }
 
-          if (hasChildren) {
-            exp.classList.remove("mm-disabled");
-            const folded = inode.data.payload && inode.data.payload.fold === 1;
-            exp.textContent = folded ? "+" : "−";
-          } else {
+          const kids = hasKids(d);
+          if (!kids){
             exp.classList.add("mm-disabled");
             exp.textContent = "•";
+          } else {
+            exp.classList.remove("mm-disabled");
+            exp.textContent = (d.children && d.children.length) ? "−" : "+";
           }
 
           if (pill.dataset.vatBound === "1") return;
           pill.dataset.vatBound = "1";
 
-          function rerender(){
-            // IMPORTANT: re-render from the live tree markmap is using
-            const live = (mm && mm.state && mm.state.data) ? mm.state.data : null;
-            if (!live) return;
-            mm.setData(live);
-            setTimeout(async ()=>{
-              decorateAndBind();
-              await fitClamped(1.10);
-              decorateAndBind();
-            }, 35);
-          }
-
-          function toggle(){
-            if (!hasChildren) return;
-            inode.data.payload ||= {};
-            inode.data.payload.fold = (inode.data.payload.fold === 1) ? 0 : 1;
-            rerender();
-          }
-
-          exp.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); if (!hasChildren) return; toggle(); });
-          pill.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); if (!hasChildren) return; toggle(); });
+          // Click pill OR expander toggles
+          exp.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); if (!hasKids(d)) return; toggleDataNode(d); });
+          pill.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); if (!hasKids(d)) return; toggleDataNode(d); });
         });
       }
 
@@ -231,23 +260,22 @@
         const { root } = transformer.transform(clean);
         setHeaderFrom(root && root.content ? root.content : "");
 
-        foldFrom(root, 0, INIT_LEVEL);
-        collapseBeyond(root, 0, MAX_LEVEL);
+        collapseToLevel(root, 0, INIT_LEVEL);
+        capMaxDepth(root, 0, MAX_LEVEL);
 
-        initialRoot = deepClone(root);
+        initialData = deepClone(root);
 
         const opts = {
           autoFit:false,
           pan:true,
           zoom:true,
           scrollForPan:true,
-          duration:160,
-          spacingHorizontal: 210,
-          spacingVertical: 140,
+          duration:0,                 // reduce “shudder”
+          spacingHorizontal: 220,     // aligns levels into clear columns
+          spacingVertical: 150,
           paddingX: 18,
           nodeMinHeight: 26,
           maxWidth: 560,
-          initialExpandLevel: INIT_LEVEL,
           color: () => "rgba(148,163,184,0.60)",
           lineWidth: () => 1.2
         };
@@ -255,33 +283,20 @@
         if (!mm) {
           mm = Markmap.create(svg, opts, root);
 
-          // Zoom: rescale is MULTIPLIER in your build
-          document.getElementById("zoomIn").addEventListener("click", async ()=>{
-            try { await mm.rescale(1.15); } catch(e) {}
-          });
-          document.getElementById("zoomOut").addEventListener("click", async ()=>{
-            try { await mm.rescale(1/1.15); } catch(e) {}
-          });
+          // Zoom buttons: rescale is MULTIPLIER (this fixes "-" behaving wrong)
+          document.getElementById("zoomIn").addEventListener("click", async ()=>{ try{ await mm.rescale(1.15); }catch(e){} });
+          document.getElementById("zoomOut").addEventListener("click", async ()=>{ try{ await mm.rescale(1/1.15); }catch(e){} });
 
-          document.getElementById("overview").addEventListener("click", async ()=>{ await fitClamped(1.10); });
-
-          document.getElementById("readable").addEventListener("click", async ()=>{
-            try { await mm.rescale(1.15); } catch(e) {}
-          });
+          document.getElementById("overview").addEventListener("click", async ()=>{ await fitClamped(1.05); });
+          document.getElementById("readable").addEventListener("click", async ()=>{ try{ await mm.rescale(1.25); }catch(e){} });
 
           document.getElementById("reset").addEventListener("click", async ()=>{
-            mm.setData(deepClone(initialRoot));
-            setTimeout(async ()=>{
-              decorateAndBind();
-              await fitClamped(1.10);
-              decorateAndBind();
-            }, 35);
+            mm.setData(deepClone(initialData));
+            setTimeout(async ()=>{ decorate(); await fitClamped(1.05); decorate(); }, 40);
           });
 
           document.getElementById("closeBtn").addEventListener("click", ()=>{
             try { window.parent && window.parent.postMessage({ type:"VAT_CLOSE" }, "*"); } catch(e) {}
-            // If not embedded, just go back (harmless if no history)
-            try { if (window === window.top) history.back(); } catch(e) {}
           });
 
         } else {
@@ -290,9 +305,9 @@
         }
 
         setTimeout(async ()=>{
-          decorateAndBind();
-          await fitClamped(1.10);
-          decorateAndBind();
+          decorate();
+          await fitClamped(1.05);
+          decorate();
           try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_ACK" }, "*"); } catch(e) {}
         }, 60);
       }
@@ -308,27 +323,16 @@
         return "";
       }
 
+      // Listen for markdown from Squarespace
       window.addEventListener("message", (event)=>{
         const d = event.data || {};
-        const type = d.type || "";
-
-        if (type === "VAT_MINDMAP_MD" || type === "MARKDOWN" || type === "MD" || type === "") {
+        if (d.type === "VAT_MINDMAP_MD" || d.type === "MARKDOWN" || d.type === "MD" || !d.type) {
           const md = extractMarkdown(d);
-          if (!md) return;
-
-          const h = hashStr(md);
-          if (h === lastHash && md.length === lastLen) {
-            try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_ACK" }, "*"); } catch(e) {}
-            return;
-          }
-          lastHash = h;
-          lastLen = md.length;
-
-          renderMarkdown(md);
+          if (md) renderMarkdown(md);
         }
       });
 
-      // handshake
+      // Handshake so parent only posts when viewer ready
       try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_READY" }, "*"); } catch(e) {}
     })();
   </script>
