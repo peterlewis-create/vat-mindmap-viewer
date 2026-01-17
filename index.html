@@ -6,121 +6,83 @@
   <title>VAT Mindmap Viewer</title>
 
   <style>
-    :root { --bg:#0b0f14; --text:#ffffff; }
+    :root { --bg:#0b0f14; --text:#ffffff; --accent:#3b82f6; }
 
     html, body {
       height: 100%;
       margin: 0;
       background: var(--bg);
       overflow: hidden;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       color: var(--text);
     }
 
     #svg { width: 100vw; height: 100vh; display: block; }
 
     /* Header */
-    #header { position: fixed; top: 22px; left: 22px; z-index: 999; pointer-events: none; }
-    #title { font-size: 30px; font-weight: 900; margin: 0; color:#fff; text-shadow: 0 2px 12px rgba(0,0,0,0.9); }
-    #subtitle { font-size: 14px; margin-top: 6px; color: rgba(255,255,255,0.85); }
+    #header { position: fixed; top: 22px; left: 22px; z-index: 1000; pointer-events: none; }
+    #title { font-size: 34px; font-weight: 900; margin: 0; }
+    #subtitle { font-size: 14px; opacity: 0.85; margin-top: 6px; }
 
     /* Toolbar */
-    #toolbar {
-      position: fixed; top: 22px; right: 22px;
-      z-index: 1000; display: flex; gap: 10px;
-      pointer-events: auto;
-    }
+    #toolbar { position: fixed; top: 22px; right: 22px; z-index: 1100; display:flex; gap:10px; pointer-events:auto; }
     .tb-btn {
       background: #1f2937;
-      border: 2px solid rgba(255,255,255,0.45);
+      border: 2px solid rgba(255,255,255,0.35);
       color: #fff;
-      min-width: 46px; height: 46px;
+      min-width: 46px;
+      height: 46px;
       border-radius: 10px;
       cursor: pointer;
       font-weight: 900;
       font-size: 20px;
-      display: inline-flex; align-items: center; justify-content: center;
-      box-shadow: 0 6px 14px rgba(0,0,0,0.35);
-      user-select: none;
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
-    .tb-btn.text-btn { font-size: 14px; padding: 0 16px; width: auto; }
-    .tb-btn:hover { background:#374151; border-color:#fff; }
+    .tb-btn.text-btn { font-size: 14px; padding: 0 16px; width:auto; }
+    .tb-btn:hover { border-color:#fff; background:#2b3647; }
 
-    /* Links */
-    .markmap-link { stroke: rgba(255,255,255,0.40) !important; stroke-width: 2.5px !important; }
-
-    /* ========= READABILITY + BIGGER BOXES =========
-       Markmap may render nodes via:
-       - foreignObject (.markmap-foreign)
-       - SVG text
-       We force BOTH to be big and readable.
-    */
-
-    /* foreignObject boxes (this is what gives the rounded “tax boxes”) */
+    /* ====== NODE READABILITY (your key requirement) ====== */
     .markmap-foreign {
       background: #111827 !important;
-      border: 2px solid #3b82f6 !important;
+      border: 2px solid var(--accent) !important;
       border-radius: 12px !important;
 
-      /* >>> make boxes ~2× taller */
-      padding: 20px 26px !important;
-      min-height: 64px !important;
+      /* Twice the height + readable */
+      padding: 18px 26px !important;
+      min-height: 60px !important;
 
-      /* text */
       color: #ffffff !important;
       font-weight: 900 !important;
-      font-size: 22px !important;
+      font-size: 18px !important;
       line-height: 1.15 !important;
 
-      /* layout */
-      display: inline-flex !important;
+      /* allow wrapping for longer labels */
+      white-space: normal !important;
+      max-width: 360px !important;
+
+      box-shadow: 0 10px 26px rgba(0,0,0,0.65) !important;
+      display: flex !important;
       align-items: center !important;
-      white-space: nowrap !important;
-
-      box-shadow: 0 10px 26px rgba(0,0,0,0.70) !important;
-      overflow: visible !important;
     }
-    .markmap-foreign div {
-      color: #ffffff !important;
-      background: transparent !important;
-    }
+    .markmap-foreign div { color:#fff !important; }
 
-    /* If markmap renders SVG text, force it readable too */
-    .markmap text,
-    .markmap .markmap-node text {
-      fill: #ffffff !important;
-      font-size: 22px !important;
-      font-weight: 900 !important;
-
-      /* outline so it never “disappears” */
-      paint-order: stroke !important;
-      stroke: rgba(0,0,0,0.95) !important;
-      stroke-width: 6px !important;
-      stroke-linejoin: round !important;
-    }
-
-    /* foreignObject inner text safety net */
-    .markmap foreignObject,
-    .markmap foreignObject * {
-      color: #ffffff !important;
-      font-size: 22px !important;
-      font-weight: 900 !important;
-      line-height: 1.15 !important;
-    }
+    .markmap-link { stroke: rgba(255,255,255,0.38) !important; stroke-width: 2.8px !important; }
   </style>
 </head>
 
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle" id="lvl">Expand level: 2 (click a node to magnify)</div>
+    <div id="subtitle">Expand level: 2 (click a node to magnify)</div>
   </div>
 
   <div id="toolbar">
-    <button class="tb-btn" id="plus"  type="button" title="Show one more level">+</button>
-    <button class="tb-btn" id="minus" type="button" title="Hide one level">−</button>
-    <button class="tb-btn text-btn" id="fit"  type="button" title="Reset view">Resize</button>
-    <button class="tb-btn text-btn" id="close" type="button" title="Close">Close</button>
+    <button class="tb-btn" id="zin">+</button>
+    <button class="tb-btn" id="zout">−</button>
+    <button class="tb-btn text-btn" id="reset">Resize</button>
+    <button class="tb-btn text-btn" id="close">Close</button>
   </div>
 
   <svg id="svg" class="markmap"></svg>
@@ -130,172 +92,150 @@
   <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
 
   <script>
-    (function () {
+    (function(){
       const { Transformer, Markmap } = window.markmap;
-      const svg = document.querySelector('#svg');
+
+      const svgEl = document.getElementById('svg');
+      const svgSel = d3.select(svgEl);
       const transformer = new Transformer();
 
       let mm = null;
-      let baseRoot = null;
-      let expandLevel = 2;
+      let zoom = null;
+      let gEl = null;
+      let homeTransform = null;
 
-      function clone(obj) {
-        if (typeof structuredClone === 'function') return structuredClone(obj);
-        return JSON.parse(JSON.stringify(obj));
+      function setupCustomZoom() {
+        gEl = svgEl.querySelector('g');
+        if (!gEl) return;
+
+        // Remove any existing zoom handlers so ours is authoritative
+        svgSel.on('.zoom', null);
+
+        zoom = d3.zoom()
+          .scaleExtent([0.2, 6])
+          .on('zoom', (event) => {
+            d3.select(gEl).attr('transform', event.transform);
+          });
+
+        svgSel.call(zoom);
       }
 
-      function applyFoldByDepth(node, depth, maxDepth) {
-        if (!node) return;
-        if (!node.payload) node.payload = {};
-        if (!node.children || !node.children.length) return;
+      function computeFitTransform() {
+        if (!gEl || !zoom) return null;
 
-        if (depth >= maxDepth) {
-          node.payload.fold = 1;
-        } else {
-          node.payload.fold = 0;
-          for (const child of node.children) applyFoldByDepth(child, depth + 1, maxDepth);
-        }
+        const bbox = gEl.getBBox();
+        const w = svgEl.clientWidth || window.innerWidth;
+        const h = svgEl.clientHeight || window.innerHeight;
+        const pad = 90;
+
+        const scale = Math.min(
+          w / (bbox.width + pad * 2),
+          h / (bbox.height + pad * 2)
+        );
+
+        const tx = (w - bbox.width * scale) / 2 - bbox.x * scale;
+        const ty = (h - bbox.height * scale) / 2 - bbox.y * scale;
+
+        return d3.zoomIdentity.translate(tx, ty).scale(scale);
       }
 
-      function render() {
-        if (!baseRoot) return;
+      function goHome(animated = true) {
+        if (!zoom) return;
+        if (!homeTransform) homeTransform = computeFitTransform();
+        if (!homeTransform) return;
 
-        const root = clone(baseRoot);
-        applyFoldByDepth(root, 0, expandLevel);
-
-        if (!mm) {
-          mm = Markmap.create(svg, {
-            autoFit: true,
-            spacingVertical: 70,
-            spacingHorizontal: 180,
-          }, root);
-          wireNodeMagnify();
-        } else {
-          mm.setData(root);
-          resetView(true); // after changing fold levels, reset neatly
-          wireNodeMagnify();
-        }
-
-        const lvl = document.getElementById('lvl');
-        if (lvl) lvl.textContent = 'Expand level: ' + expandLevel + ' (click a node to magnify)';
+        const t = svgSel.transition().duration(animated ? 260 : 0);
+        t.call(zoom.transform, homeTransform);
       }
 
-      /* === TRUE RESET (fixes your Resize button) ===
-         1) cancel any active zoom transitions
-         2) reset zoom transform
-         3) then fit the whole map
-      */
-      function resetView(skipInterrupt) {
-        if (!mm) return;
+      function zoomBy(factor) {
+        if (!zoom) return;
+        svgSel.transition().duration(180).call(zoom.scaleBy, factor);
+      }
 
-        const sel = d3.select(svg);
-        try { if (!skipInterrupt) sel.interrupt(); } catch (e) {}
+      function focusNode(nodeG) {
+        if (!zoom || !nodeG) return;
 
-        // Hard reset zoom/pan first
-        try {
-          if (mm.zoom && mm.zoom.transform) {
-            sel.call(mm.zoom.transform, d3.zoomIdentity);
+        const bbox = nodeG.getBBox();
+        const w = svgEl.clientWidth || window.innerWidth;
+        const h = svgEl.clientHeight || window.innerHeight;
+
+        const current = d3.zoomTransform(svgEl);
+        const targetK = Math.min(5, Math.max(current.k * 1.8, 1.6));
+
+        const cx = bbox.x + bbox.width / 2;
+        const cy = bbox.y + bbox.height / 2;
+
+        const t = d3.zoomIdentity
+          .translate(w / 2 - cx * targetK, h / 2 - cy * targetK)
+          .scale(targetK);
+
+        svgSel.transition().duration(260).call(zoom.transform, t);
+      }
+
+      function bindUI() {
+        const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+
+        document.getElementById('zin').addEventListener('click', (e) => { stop(e); zoomBy(1.25); }, true);
+        document.getElementById('zout').addEventListener('click', (e) => { stop(e); zoomBy(0.8); }, true);
+        document.getElementById('reset').addEventListener('click', (e) => { stop(e); goHome(true); }, true);
+        document.getElementById('close').addEventListener('click', (e) => {
+          stop(e);
+          window.parent.postMessage({ type: 'VAT_CLOSE' }, '*');
+        }, true);
+
+        // Click-to-magnify (your requirement #2)
+        svgEl.addEventListener('click', (e) => {
+          // ignore toolbar clicks
+          if (e.target.closest('#toolbar')) return;
+
+          const node = e.target.closest('g.markmap-node');
+          if (!node) return;
+
+          focusNode(node);
+        }, true);
+
+        // Keep home view accurate on resize
+        window.addEventListener('resize', () => {
+          // recompute home view after layout changes
+          if (gEl && zoom) {
+            homeTransform = computeFitTransform();
           }
-        } catch (e) {}
-
-        // Then fit to screen
-        setTimeout(() => {
-          try { mm.fit && mm.fit(); } catch (e) {}
-        }, 0);
-      }
-
-      /* === Magnify clicked node === */
-      function zoomToNodeElement(nodeEl, strength) {
-        if (!mm || !mm.zoom) return;
-
-        const svgRect = svg.getBoundingClientRect();
-        const nodeRect = nodeEl.getBoundingClientRect();
-
-        const cx = (nodeRect.left + nodeRect.right) / 2 - svgRect.left;
-        const cy = (nodeRect.top + nodeRect.bottom) / 2 - svgRect.top;
-
-        const t = d3.zoomTransform(svg);
-        const p = t.invert([cx, cy]);
-
-        const k2 = Math.max(1, Math.min(6, t.k * strength));
-        const x2 = (svgRect.width  / 2) - (p[0] * k2);
-        const y2 = (svgRect.height / 2) - (p[1] * k2);
-
-        const tr = d3.zoomIdentity.translate(x2, y2).scale(k2);
-
-        d3.select(svg)
-          .interrupt()
-          .transition()
-          .duration(220)
-          .call(mm.zoom.transform, tr);
-      }
-
-      function wireNodeMagnify() {
-        const groups = d3.select(svg).selectAll('g');
-        groups.style('cursor', function () {
-          const hasText = this.querySelector('text') || this.querySelector('foreignObject');
-          return hasText ? 'pointer' : null;
-        });
-
-        groups.on('click.vatFocus', null);
-        groups.on('click.vatFocus', function(event) {
-          const isNode = this.querySelector('text') || this.querySelector('foreignObject');
-          if (!isNode) return;
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          // stronger zoom once you're looking deeper
-          const strength = (expandLevel >= 4) ? 2.1 : 1.6;
-          zoomToNodeElement(this, strength);
         });
       }
-
-      function safe(fn){
-        return function(e){
-          e.preventDefault(); e.stopPropagation();
-          fn();
-        };
-      }
-
-      document.getElementById('plus').addEventListener('click', safe(() => {
-        expandLevel = Math.min(10, expandLevel + 1);
-        render();
-      }), true);
-
-      document.getElementById('minus').addEventListener('click', safe(() => {
-        expandLevel = Math.max(1, expandLevel - 1);
-        render();
-      }), true);
-
-      // Resize should always reset to the “original screen”
-      document.getElementById('fit').addEventListener('click', safe(() => {
-        resetView();
-      }), true);
-
-      document.getElementById('close').addEventListener('click', safe(() => {
-        window.parent.postMessage({ type: 'VAT_CLOSE' }, '*');
-      }), true);
-
-      // Background click => reset view (very useful after magnify)
-      svg.addEventListener('click', () => resetView(), { passive: true });
 
       // Receive markdown from Squarespace
       window.addEventListener('message', (ev) => {
-        if (!ev.data || ev.data.type !== 'VAT_SET') return;
+        if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
 
-        expandLevel = Number(ev.data.expandLevel || 2);
-        if (!Number.isFinite(expandLevel)) expandLevel = 2;
-        expandLevel = Math.max(1, Math.min(10, expandLevel));
+        const md = String(ev.data.markdown || '');
+        const { root } = transformer.transform(md);
 
-        const { root } = transformer.transform(String(ev.data.markdown || ''));
-        baseRoot = root;
+        if (!mm) {
+          mm = Markmap.create(svgEl, {
+            autoFit: false,          // we control fit ourselves
+            spacingVertical: 120,    // MORE vertical => “steeper” like your LLM example
+            spacingHorizontal: 95    // LESS horizontal => reduces “wide” sprawl
+          }, root);
 
-        // First render then fit (ensures Resize works from the start)
-        render();
-        setTimeout(() => resetView(), 50);
+          // after first render, attach our zoom + set home view
+          setTimeout(() => {
+            setupCustomZoom();
+            homeTransform = computeFitTransform();
+            goHome(false);
+            bindUI();
+          }, 0);
+
+        } else {
+          mm.setData(root);
+          setTimeout(() => {
+            homeTransform = computeFitTransform();
+            goHome(true);
+          }, 0);
+        }
       });
 
+      // Handshake
       window.parent.postMessage({ type: 'VAT_READY' }, '*');
     })();
   </script>
