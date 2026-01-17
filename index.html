@@ -8,35 +8,43 @@
     :root {
       --bg: #0b0f14;
       --text: #ffffff;
-      --panel: rgba(255, 255, 255, 0.05);
     }
     html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; font-family: sans-serif; color: var(--text); }
     #svg { width: 100vw; height: 100vh; display: block; }
 
     /* Header & Toolbars */
-    #header { position: fixed; top: 20px; left: 20px; z-index: 100; pointer-events: none; }
-    #title { font-size: 24px; font-weight: 800; margin: 0; }
-    #subtitle { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 5px; }
+    #header { position: fixed; top: 25px; left: 25px; z-index: 100; pointer-events: none; }
+    #title { font-size: 28px; font-weight: 800; margin: 0; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+    #subtitle { font-size: 14px; color: rgba(255,255,255,0.7); margin-top: 5px; }
     
-    #toolbar { position: fixed; top: 20px; right: 20px; z-index: 100; display: flex; gap: 10px; }
-    .tb-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; 
-              width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 18px; }
-    .tb-btn.wide { width: auto; padding: 0 15px; font-size: 14px; }
-    .tb-btn:hover { background: rgba(255,255,255,0.2); }
-
-    /* Fix Readability & Line Height */
-    .markmap-foreign {
-      background: rgba(255, 255, 255, 0.12) !important;
-      border: 1px solid rgba(255, 255, 255, 0.25) !important;
-      border-radius: 10px !important;
-      padding: 8px 15px !important;
-      color: #fff !important;
-      font-weight: 700 !important;
-      font-size: 15px !important;
-      white-space: nowrap; /* Forces text to stay on one line */
+    #toolbar { position: fixed; top: 25px; right: 25px; z-index: 200; display: flex; gap: 10px; }
+    .tb-btn { 
+      background: rgba(255,255,255,0.15); 
+      border: 1px solid rgba(255,255,255,0.3); 
+      color: white; 
+      min-width: 40px; height: 40px; border-radius: 8px; 
+      cursor: pointer; font-weight: bold; font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
     }
-    .markmap-foreign div { color: #fff !important; }
-    .markmap-link { stroke: rgba(255,255,255,0.2) !important; stroke-width: 2px !important; }
+    .tb-btn.text-btn { font-size: 14px; padding: 0 15px; width: auto; }
+    .tb-btn:hover { background: rgba(255,255,255,0.25); }
+
+    /* CRITICAL: Text Readability Fix */
+    .markmap-foreign {
+      background: #1a222d !important; /* Dark solid background for text contrast */
+      border: 2px solid rgba(255,255,255,0.4) !important; /* Brighter border */
+      border-radius: 8px !important;
+      padding: 10px 18px !important;
+      color: #ffffff !important;
+      font-weight: 800 !important;
+      font-size: 16px !important; /* Larger text */
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      white-space: nowrap;
+    }
+    .markmap-foreign div { color: #ffffff !important; }
+    
+    /* Line styles */
+    .markmap-link { stroke: rgba(255,255,255,0.3) !important; stroke-width: 2.5px !important; }
   </style>
 </head>
 <body>
@@ -45,9 +53,10 @@
     <div id="subtitle">Based on 79 sources</div>
   </div>
   <div id="toolbar">
-    <button class="tb-btn" id="zin">+</button>
-    <button class="tb-btn" id="zout">−</button>
-    <button class="tb-btn wide" id="close">Close</button>
+    <button class="tb-btn" id="zin" title="Zoom In">+</button>
+    <button class="tb-btn" id="zout" title="Zoom Out">−</button>
+    <button class="tb-btn text-btn" id="reset" title="Resize to Original">Resize</button>
+    <button class="tb-btn text-btn" id="close">Close</button>
   </div>
   <svg id="svg" class="markmap"></svg>
 
@@ -68,8 +77,8 @@
         if (!mm) {
           mm = Markmap.create(svg, {
             autoFit: true,
-            spacingVertical: 45,   // Increases height between lines
-            spacingHorizontal: 140, // Expands width
+            spacingVertical: 50,   
+            spacingHorizontal: 160,
           }, root);
         } else {
           mm.setData(root);
@@ -77,10 +86,15 @@
         }
       });
 
-      // Button Actions
-      document.getElementById('zin').onclick = () => mm.rescale(1.25);
-      document.getElementById('zout').onclick = () => mm.rescale(0.8);
-      document.getElementById('close').onclick = () => window.parent.postMessage({type:'VAT_CLOSE'}, '*');
+      // Navigation Actions
+      document.getElementById('zin').onclick = (e) => { e.stopPropagation(); mm.rescale(1.25); };
+      document.getElementById('zout').onclick = (e) => { e.stopPropagation(); mm.rescale(0.8); };
+      document.getElementById('reset').onclick = (e) => { e.stopPropagation(); mm.fit(); };
+      document.getElementById('close').onclick = (e) => { 
+        e.stopPropagation(); 
+        window.parent.postMessage({type:'VAT_CLOSE'}, '*'); 
+      };
+
       window.parent.postMessage({ type: 'VAT_READY' }, '*');
     })();
   </script>
