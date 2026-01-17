@@ -1,157 +1,106 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>VAT Mindmap Viewer</title>
-  <style>
-    :root {
-      --bg: #0b0f14;
-      --box-bg: #1e293b;
-      --text: #ffffff;
-      --accent: #3b82f6;
+<style>
+  /* Launch Button */
+  #vat-mm-open {
+    display: inline-flex;
+    align-items: center;
+    border: 2px solid #fff;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-weight: 800;
+    cursor: pointer;
+    background: #000;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* Fullscreen overlay - SOLID BLACK to hide ghost elements */
+  #vat-mm-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 2147483647 !important; /* Maximum possible Z-index */
+    background: #0b0f14; 
+    display: none;
+  }
+  #vat-mm-overlay.vat-open { display: block; }
+
+  #vat-mm-iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+  }
+</style>
+
+<button id="vat-mm-open" type="button">Launch Interactive Mindmap</button>
+
+<div id="vat-mm-overlay">
+  <iframe id="vat-mm-iframe" title="VAT Mindmap"></iframe>
+</div>
+
+<script>
+(function(){
+  const VIEWER_URL = "https://peterlewis-create.github.io/vat-mindmap-viewer/";
+  const overlay = document.getElementById('vat-mm-overlay');
+  const iframe = document.getElementById('vat-mm-iframe');
+
+  const VAT_MINDMAP_MD = `# VAT on Animals, Food, and Catering (UK)
+## Food & Drink (Human consumption)
+### Live Animals
+#### Zero rated
+#### Standard Rated
+### Food for Human consumption
+#### General-Zero Rated
+#### Excepted Items (Standard Rated)
+#### Specialised Food
+### Catering and takeaway
+#### Catering per se (Standard-Rated)
+#### Hot Takeaway Food
+## Animal Feed
+### Animal Feed
+#### General Feed (Zero-Rated)
+#### Pet and Bird Food
+### Plants and Seeds
+#### Zero-Rated
+#### Standard-Rated
+### Services and Processes
+#### New Zero-rated good production
+#### Abattoir slaughtering only (Standard-Rated)
+#### Dressing carcasses (Zero-rated)
+#### Livery services (Standard-rated)`;
+
+  function sendData() {
+    if (iframe.contentWindow) {
+      iframe.contentWindow.postMessage({ 
+        type: 'VAT_SET', 
+        markdown: VAT_MINDMAP_MD 
+      }, '*');
     }
-    html, body {
-      height: 100% !important;
-      margin: 0 !important;
-      background-color: var(--bg) !important;
-      overflow: hidden !important;
-      font-family: sans-serif !important;
+  }
+
+  document.getElementById('vat-mm-open').onclick = () => {
+    overlay.classList.add('vat-open');
+    document.body.style.overflow = 'hidden';
+    iframe.src = VIEWER_URL + "?v=" + Date.now();
+    iframe.onload = () => setTimeout(sendData, 400);
+  };
+
+  window.addEventListener('message', (ev) => {
+    if (ev.data.type === 'VAT_READY') sendData();
+    if (ev.data.type === 'VAT_CLOSE') {
+      overlay.classList.remove('vat-open');
+      document.body.style.overflow = '';
+      iframe.src = 'about:blank';
     }
-    #svg {
-      width: 100vw;
-      height: 100vh;
-      display: block;
-      background-color: var(--bg) !important;
+  });
+
+  // ESC key listener
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      overlay.classList.remove('vat-open');
+      document.body.style.overflow = '';
+      iframe.src = 'about:blank';
     }
-
-    /* TOOLBAR: visible + clickable */
-    #toolbar {
-      position: fixed;
-      top: 30px;
-      right: 30px;
-      z-index: 10000;
-      display: flex;
-      gap: 12px;
-    }
-    .tb-btn {
-      background: #334155 !important;
-      border: 2px solid #fff !important;
-      color: #fff !important;
-      min-width: 50px;
-      height: 50px;
-      border-radius: 12px;
-      cursor: pointer !important;
-      font-weight: 800;
-      font-size: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 10px 20px rgba(0,0,0,0.8);
-      user-select: none;
-    }
-
-    /* READABILITY: solid high-contrast boxes */
-    .markmap-foreign {
-      background-color: #1e293b !important;
-      border: 3px solid #3b82f6 !important;
-      border-radius: 10px !important;
-      padding: 12px 20px !important;
-      color: #ffffff !important;
-      font-weight: 800 !important;
-      font-size: 18px !important;
-      box-shadow: 0 12px 24px rgba(0,0,0,0.9) !important;
-      display: flex !important;
-      align-items: center !important;
-      white-space: nowrap !important;
-    }
-    .markmap-foreign div { color: #ffffff !important; background: transparent !important; }
-    .markmap-link { stroke: #475569 !important; stroke-width: 3px !important; }
-  </style>
-</head>
-
-<body>
-  <div id="toolbar">
-    <button class="tb-btn" id="zin" title="Expand one more level">+</button>
-    <button class="tb-btn" id="zout" title="Collapse one level">−</button>
-    <button class="tb-btn" style="width:auto; padding:0 15px;" id="res" title="Fit to screen">Resize</button>
-    <button class="tb-btn" style="width:auto; padding:0 15px;" id="cls" title="Close">Close</button>
-  </div>
-
-  <svg id="svg" class="markmap"></svg>
-
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.18.12"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12"></script>
-
-  <script>
-    (function () {
-      const { Transformer, Markmap } = window.markmap;
-      const svg = document.querySelector('#svg');
-
-      const trans = new Transformer();
-      let mm = null;
-      let lastRoot = null;
-      let expandLevel = 2; // default: show top ~2 levels
-
-      function renderRoot() {
-        if (!lastRoot) return;
-        // Re-create to apply initialExpandLevel deterministically
-        svg.innerHTML = '';
-        mm = Markmap.create(svg, {
-          autoFit: true,
-          initialExpandLevel: expandLevel,
-          spacingVertical: 80,
-          spacingHorizontal: 180
-        }, lastRoot);
-        mm.fit();
-      }
-
-      window.addEventListener('message', (ev) => {
-        const d = ev.data || {};
-        if (d.type !== 'VAT_SET') return;
-
-        const md = String(d.markdown || '').trim();
-        const { root } = trans.transform(md);
-        lastRoot = root;
-
-        if (Number.isFinite(d.expandLevel)) {
-          expandLevel = Math.max(1, Math.min(12, d.expandLevel));
-        }
-        renderRoot();
-      });
-
-      function setupBtn(id, fn) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          fn();
-        }, true);
-      }
-
-      setupBtn('zin', () => {
-        expandLevel = Math.min(expandLevel + 1, 12);
-        renderRoot();
-      });
-
-      setupBtn('zout', () => {
-        expandLevel = Math.max(expandLevel - 1, 1);
-        renderRoot();
-      });
-
-      setupBtn('res', () => {
-        if (mm) mm.fit();
-      });
-
-      setupBtn('cls', () => {
-        window.parent.postMessage({ type: 'VAT_CLOSE' }, '*');
-      });
-
-      // handshake
-      window.parent.postMessage({ type: 'VAT_READY' }, '*');
-    })();
-  </script>
-</body>
-</html>
+  });
+})();
+</script>
