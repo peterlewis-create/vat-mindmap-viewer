@@ -6,89 +6,61 @@
   <title>VAT Mindmap Viewer</title>
 
   <style>
-    html, body { height: 100%; margin: 0; }
-    body{
-      background:#0b0f16;
-      overflow:hidden;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    }
+    html, body { height:100%; margin:0; }
+    body{ background:#0b0f16; overflow:hidden; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
     #mm{ width:100vw; height:100vh; display:block; background:#0b0f16; }
     .markmap-link{ opacity:0.40; }
-    foreignObject{ overflow: visible !important; }
+    foreignObject{ overflow:visible !important; }
 
-    /* Header (NotebookLM-like) */
+    /* Header */
     #hdr{ position:fixed; left:18px; top:16px; z-index:30; pointer-events:none; }
-    #hdrTitle{
-      font-size:22px; font-weight:850; color:rgba(255,255,255,0.96);
-      letter-spacing:-0.2px; text-shadow:0 2px 10px rgba(0,0,0,0.35);
-      margin:0 0 6px 0;
-    }
+    #hdrTitle{ font-size:22px; font-weight:850; color:rgba(255,255,255,0.96); margin:0 0 6px 0; }
     #hdrSub{ font-size:13px; font-weight:650; color:rgba(255,255,255,0.62); margin:0; }
 
     /* Pills */
     .markmap-foreign{
-      display:flex !important;
-      align-items:center;
-      gap:10px;
-      box-sizing:border-box !important;
-      padding:10px 12px;
-      border-radius:14px;
+      display:flex !important; align-items:center; gap:10px;
+      padding:10px 12px; border-radius:14px;
       background:rgba(55,65,81,0.82);
       border:1px solid rgba(255,255,255,0.12);
       color:rgba(255,255,255,0.96) !important;
-      font-size:16px;
-      font-weight:800;
-      line-height:1.18;
-      text-align:left;
+      font-size:16px; font-weight:800; line-height:1.18;
       box-shadow:0 12px 34px rgba(0,0,0,0.28);
       backdrop-filter:blur(7px);
 
-      /* depth>=2 wraps */
-      width:340px;
-      max-width:340px;
+      /* default (depth>=2): wrap */
+      width:340px; max-width:340px;
       white-space:normal !important;
-      overflow-wrap:anywhere;
-      word-break:break-word;
-      hyphens:auto;
+      overflow-wrap:anywhere; word-break:break-word; hyphens:auto;
     }
     .markmap-foreign *{ color:rgba(255,255,255,0.96) !important; }
 
-    /* depth 0 & 1: wide, no-wrap */
+    /* depth 0/1: wide, no-wrap */
     .mm-depth-0, .mm-depth-1{
-      width:auto !important;
-      max-width:none !important;
+      width:auto !important; max-width:none !important;
       white-space:nowrap !important;
-      font-size:17px !important;
-      font-weight:850 !important;
+      font-size:17px !important; font-weight:850 !important;
       padding:12px 14px !important;
     }
 
     /* Chevron */
     .mm-expander{
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      width:20px;
-      height:20px;
-      border-radius:999px;
+      display:inline-flex; align-items:center; justify-content:center;
+      width:20px; height:20px; border-radius:999px;
       border:1px solid rgba(255,255,255,0.16);
       background:rgba(0,0,0,0.18);
       color:rgba(255,255,255,0.78);
-      font-weight:900;
-      font-size:12px;
-      flex:0 0 auto;
+      font-weight:900; font-size:12px;
       cursor:pointer;
       pointer-events:auto;
+      flex:0 0 auto;
     }
-
-    /* Keep circle invisible but CLICKABLE (Markmap toggles on circle click) */
-    g.markmap-node circle{ opacity:0; pointer-events:auto; }
 
     /* Controls */
     #uiBar{
       position:fixed; right:14px; top:14px; z-index:40;
       display:flex; gap:8px; align-items:center;
-      padding:10px 10px; border-radius:14px;
+      padding:10px; border-radius:14px;
       border:1px solid rgba(255,255,255,.12);
       background:rgba(0,0,0,.32);
       backdrop-filter:blur(8px);
@@ -134,13 +106,8 @@
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
-      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "3", 10));
-      const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max")  || "6", 10));
-
-      const READABLE_SCALE = 1.25;
-      const OVERVIEW_SCALE = 0.85;
-      const MIN_SCALE = 0.60;
-      const MAX_SCALE = 3.00;
+      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "4", 10));
+      const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max") || "6", 10));
 
       const svg = document.getElementById("mm");
       const { Transformer } = window.markmap;
@@ -163,27 +130,9 @@
       }
 
       function setHeaderFrom(titleText){
-        const title = decodeHtmlEntities(titleText).trim();
-        hdrTitleEl.textContent = title || "UK VAT Taxonomy";
+        hdrTitleEl.textContent = decodeHtmlEntities(titleText || "").trim() || "UK VAT Taxonomy";
         const sources = params.get("sources");
         hdrSubEl.textContent = sources ? ("Based on " + sources + " sources") : "";
-      }
-
-      function currentScale(){
-        return (mm && mm.state && mm.state.transform && typeof mm.state.transform.k === "number")
-          ? mm.state.transform.k : 1;
-      }
-
-      async function rescaleClamped(k){
-        if (!mm) return;
-        const kk = Math.max(MIN_SCALE, Math.min(MAX_SCALE, k));
-        try { await mm.rescale(kk); } catch(e) {}
-      }
-
-      async function setReadable(){ await rescaleClamped(Math.max(currentScale(), READABLE_SCALE)); }
-      async function setOverview(){
-        try { await mm.fit(1.02); } catch(e) {}
-        await rescaleClamped(OVERVIEW_SCALE);
       }
 
       function collapseBeyond(node, depth, maxDepth){
@@ -191,44 +140,6 @@
         node.payload ||= {};
         if (depth >= maxDepth) node.payload.fold = 1;
         if (node.children) node.children.forEach(ch => collapseBeyond(ch, depth+1, maxDepth));
-      }
-
-      function rightMostOpen(inode){
-        let cur = inode;
-        while (cur && cur.children && cur.children.length) {
-          const kids = cur.children;
-          const last = kids[kids.length - 1];
-          if (last && last.data && last.data.payload && last.data.payload.fold === 1) break;
-          cur = last;
-        }
-        return cur || inode;
-      }
-
-      async function keepEndVisible(inode){
-        if (!mm || !inode) return;
-        await setReadable();
-        const end = rightMostOpen(inode);
-        try { await mm.ensureVisible(end, { left:90, right:220, top:90, bottom:90 }); } catch(e) {}
-        decorateNodes();
-      }
-
-      function reset(){
-        if (!initialRoot || !mm) return;
-        liveRoot = deepClone(initialRoot);
-        mm.setData(liveRoot);
-        setTimeout(async ()=>{
-          await setReadable();
-          try { await mm.fit(1.02); } catch(e) {}
-          await setReadable();
-          decorateNodes();
-        }, 30);
-      }
-
-      function toggleByDispatch(g){
-        const circle = g.querySelector("circle");
-        if (circle) {
-          circle.dispatchEvent(new MouseEvent("click", { bubbles:true }));
-        }
       }
 
       function decorateNodes(){
@@ -243,44 +154,56 @@
           pill.classList.remove("mm-depth-0","mm-depth-1","mm-depth-2","mm-depth-3","mm-depth-4","mm-depth-5","mm-depth-6");
           pill.classList.add("mm-depth-" + Math.min(depth, 6));
 
-          // Chevron that toggles expand/collapse
-          let exp = pill.querySelector(".mm-expander");
-          const hasChildren = inode.children && inode.children.length;
+          const hasChildren = inode.data.children && inode.data.children.length;
 
+          // Expander
+          let exp = pill.querySelector(".mm-expander");
           if (hasChildren) {
             if (!exp) {
               exp = document.createElement("span");
               exp.className = "mm-expander";
               pill.appendChild(exp);
-
-              exp.addEventListener("click", (e)=>{
-                e.stopPropagation();
-                toggleByDispatch(g);
-                setTimeout(()=>decorateNodes(), 60);
-                setTimeout(()=>keepEndVisible(g.__data__), 80);
-              });
             }
             const folded = inode.data.payload && inode.data.payload.fold === 1;
             exp.textContent = folded ? "›" : "‹";
           } else {
             if (exp) exp.remove();
           }
-
-          // Click anywhere on pill toggles if it has children; otherwise just pan/ensure visible
-          if (g.dataset.vatBound === "1") return;
-          g.dataset.vatBound = "1";
-          g.style.cursor = hasChildren ? "pointer" : "default";
-
-          g.addEventListener("click", ()=>{
-            if (inode.children && inode.children.length) {
-              toggleByDispatch(g);
-              setTimeout(()=>decorateNodes(), 60);
-              setTimeout(()=>keepEndVisible(g.__data__), 80);
-            } else {
-              setTimeout(()=>keepEndVisible(g.__data__), 0);
-            }
-          });
         });
+      }
+
+      // REAL toggle: edit payload.fold and re-render
+      function toggleNode(inode){
+        const d = inode && inode.data;
+        if (!d || !d.children || !d.children.length) return;
+
+        d.payload ||= {};
+        d.payload.fold = (d.payload.fold === 1) ? 0 : 1;
+
+        // re-render; markmap keeps current transform well enough in practice
+        mm.setData(liveRoot);
+        setTimeout(decorateNodes, 30);
+      }
+
+      function bindToggleClicks(){
+        // One delegated handler; works for foreignObject content too
+        svg.addEventListener("click", (e)=>{
+          const g = e.target && e.target.closest ? e.target.closest("g.markmap-node") : null;
+          if (!g || !g.__data__) return;
+
+          const inode = g.__data__;
+          const hasChildren = inode.data && inode.data.children && inode.data.children.length;
+          if (!hasChildren) return;
+
+          // click on chevron OR pill toggles
+          const isExpander = e.target && e.target.classList && e.target.classList.contains("mm-expander");
+          const isPill = e.target && (e.target.classList && e.target.classList.contains("markmap-foreign") || e.target.closest(".markmap-foreign"));
+          if (isExpander || isPill) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleNode(inode);
+          }
+        }, true);
       }
 
       async function renderMarkdown(md){
@@ -302,14 +225,13 @@
           scrollForPan:true,
           duration:220,
 
-          spacingHorizontal: 165,
-          spacingVertical: 125,
+          // These two are what make level-3 feel more "stacked/vertical"
+          spacingHorizontal: 150,
+          spacingVertical: 160,
 
           paddingX: 18,
           nodeMinHeight: 26,
-
-          // give foreignObject enough width so pills never clip
-          maxWidth: 520,
+          maxWidth: 560,
 
           initialExpandLevel: INIT_LEVEL,
 
@@ -319,23 +241,27 @@
 
         if (!mm) {
           mm = Markmap.create(svg, opts, liveRoot);
+          bindToggleClicks();
 
-          document.getElementById("zoomIn").addEventListener("click", () => rescaleClamped(currentScale() * 1.15));
-          document.getElementById("zoomOut").addEventListener("click", () => rescaleClamped(currentScale() / 1.15));
-          document.getElementById("overview").addEventListener("click", setOverview);
-          document.getElementById("readable").addEventListener("click", setReadable);
-          document.getElementById("reset").addEventListener("click", reset);
+          document.getElementById("zoomIn").addEventListener("click", () => mm.rescale(mm.state.transform.k * 1.15));
+          document.getElementById("zoomOut").addEventListener("click", () => mm.rescale(mm.state.transform.k / 1.15));
+          document.getElementById("overview").addEventListener("click", async ()=>{ try{ await mm.fit(1.02); }catch(e){} });
+          document.getElementById("readable").addEventListener("click", () => mm.rescale(Math.max(mm.state.transform.k, 1.25)));
+          document.getElementById("reset").addEventListener("click", ()=>{
+            liveRoot = deepClone(initialRoot);
+            mm.setData(liveRoot);
+            setTimeout(decorateNodes, 30);
+          });
         } else {
           mm.setOptions(opts);
           mm.setData(liveRoot);
         }
 
         setTimeout(async ()=>{
-          await setReadable();
           try { await mm.fit(1.02); } catch(e) {}
-          await setReadable();
+          try { await mm.rescale(Math.max(mm.state.transform.k, 1.25)); } catch(e) {}
           decorateNodes();
-        }, 40);
+        }, 60);
       }
 
       function extractMarkdown(data){
@@ -358,11 +284,8 @@
         }
       });
 
-      function notifyReady(){
-        try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_READY" }, "*"); } catch(e) {}
-      }
-      window.addEventListener("load", notifyReady);
-      notifyReady();
+      // READY ping for Squarespace
+      try { window.parent && window.parent.postMessage({ type:"VAT_MINDMAP_READY" }, "*"); } catch(e) {}
     })();
   </script>
 </body>
