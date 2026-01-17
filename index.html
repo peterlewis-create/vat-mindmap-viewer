@@ -14,56 +14,36 @@
     }
     #mm{ width:100vw; height:100vh; display:block; background:#0b0f16; }
     .markmap-link{ opacity:0.40; }
-
-    /* prevent clipping */
     foreignObject{ overflow: visible !important; }
 
-    /* ===== Header (NotebookLM-like) ===== */
-    #hdr{
-      position:fixed;
-      left:18px;
-      top:16px;
-      z-index:30;
-      pointer-events:none;
-    }
+    /* Header (NotebookLM-like) */
+    #hdr{ position:fixed; left:18px; top:16px; z-index:30; pointer-events:none; }
     #hdrTitle{
-      font-size:22px;
-      font-weight:850;
-      color:rgba(255,255,255,0.96);
-      letter-spacing:-0.2px;
-      text-shadow:0 2px 10px rgba(0,0,0,0.35);
+      font-size:22px; font-weight:850; color:rgba(255,255,255,0.96);
+      letter-spacing:-0.2px; text-shadow:0 2px 10px rgba(0,0,0,0.35);
       margin:0 0 6px 0;
     }
-    #hdrSub{
-      font-size:13px;
-      font-weight:650;
-      color:rgba(255,255,255,0.62);
-      margin:0;
-    }
+    #hdrSub{ font-size:13px; font-weight:650; color:rgba(255,255,255,0.62); margin:0; }
 
-    /* ===== Node pills ===== */
+    /* Pills */
     .markmap-foreign{
       display:flex !important;
       align-items:center;
       gap:10px;
       box-sizing:border-box !important;
-
       padding:10px 12px;
       border-radius:14px;
-
       background:rgba(55,65,81,0.82);
       border:1px solid rgba(255,255,255,0.12);
       color:rgba(255,255,255,0.96) !important;
-
       font-size:16px;
       font-weight:800;
       line-height:1.18;
       text-align:left;
-
       box-shadow:0 12px 34px rgba(0,0,0,0.28);
       backdrop-filter:blur(7px);
 
-      /* default (depth>=2): wrap + cap width */
+      /* depth>=2 wraps */
       width:340px;
       max-width:340px;
       white-space:normal !important;
@@ -73,19 +53,17 @@
     }
     .markmap-foreign *{ color:rgba(255,255,255,0.96) !important; }
 
-    /* Depth 0 & 1 = NotebookLM style: wide, readable, NO wrap */
+    /* depth 0 & 1: wide, no-wrap */
     .mm-depth-0, .mm-depth-1{
       width:auto !important;
       max-width:none !important;
       white-space:nowrap !important;
-
       font-size:17px !important;
       font-weight:850 !important;
       padding:12px 14px !important;
-      border-radius:14px !important;
     }
 
-    /* chevron */
+    /* Chevron */
     .mm-expander{
       display:inline-flex;
       align-items:center;
@@ -99,22 +77,18 @@
       font-weight:900;
       font-size:12px;
       flex:0 0 auto;
+      cursor:pointer;
+      pointer-events:auto;
     }
 
-    /* Hide default circles for cleaner NotebookLM look */
-    g.markmap-node circle{ opacity:0.0; }
+    /* Keep circle invisible but CLICKABLE (Markmap toggles on circle click) */
+    g.markmap-node circle{ opacity:0; pointer-events:auto; }
 
-    /* ===== Controls ===== */
+    /* Controls */
     #uiBar{
-      position:fixed;
-      right:14px;
-      top:14px;
-      z-index:40;
-      display:flex;
-      gap:8px;
-      align-items:center;
-      padding:10px 10px;
-      border-radius:14px;
+      position:fixed; right:14px; top:14px; z-index:40;
+      display:flex; gap:8px; align-items:center;
+      padding:10px 10px; border-radius:14px;
       border:1px solid rgba(255,255,255,.12);
       background:rgba(0,0,0,.32);
       backdrop-filter:blur(8px);
@@ -160,7 +134,7 @@
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
-      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "2", 10));
+      const INIT_LEVEL = Math.max(1, parseInt(params.get("init") || "3", 10));
       const MAX_LEVEL  = Math.max(INIT_LEVEL, parseInt(params.get("max")  || "6", 10));
 
       const READABLE_SCALE = 1.25;
@@ -197,8 +171,7 @@
 
       function currentScale(){
         return (mm && mm.state && mm.state.transform && typeof mm.state.transform.k === "number")
-          ? mm.state.transform.k
-          : 1;
+          ? mm.state.transform.k : 1;
       }
 
       async function rescaleClamped(k){
@@ -251,6 +224,13 @@
         }, 30);
       }
 
+      function toggleByDispatch(g){
+        const circle = g.querySelector("circle");
+        if (circle) {
+          circle.dispatchEvent(new MouseEvent("click", { bubbles:true }));
+        }
+      }
+
       function decorateNodes(){
         svg.querySelectorAll("g.markmap-node").forEach(g=>{
           const inode = g.__data__;
@@ -263,13 +243,22 @@
           pill.classList.remove("mm-depth-0","mm-depth-1","mm-depth-2","mm-depth-3","mm-depth-4","mm-depth-5","mm-depth-6");
           pill.classList.add("mm-depth-" + Math.min(depth, 6));
 
+          // Chevron that toggles expand/collapse
           let exp = pill.querySelector(".mm-expander");
           const hasChildren = inode.children && inode.children.length;
+
           if (hasChildren) {
             if (!exp) {
               exp = document.createElement("span");
               exp.className = "mm-expander";
               pill.appendChild(exp);
+
+              exp.addEventListener("click", (e)=>{
+                e.stopPropagation();
+                toggleByDispatch(g);
+                setTimeout(()=>decorateNodes(), 60);
+                setTimeout(()=>keepEndVisible(g.__data__), 80);
+              });
             }
             const folded = inode.data.payload && inode.data.payload.fold === 1;
             exp.textContent = folded ? "›" : "‹";
@@ -277,13 +266,19 @@
             if (exp) exp.remove();
           }
 
+          // Click anywhere on pill toggles if it has children; otherwise just pan/ensure visible
           if (g.dataset.vatBound === "1") return;
           g.dataset.vatBound = "1";
-          g.style.cursor = "pointer";
+          g.style.cursor = hasChildren ? "pointer" : "default";
+
           g.addEventListener("click", ()=>{
-            const n = g.__data__;
-            if (!n) return;
-            setTimeout(()=>keepEndVisible(n), 0);
+            if (inode.children && inode.children.length) {
+              toggleByDispatch(g);
+              setTimeout(()=>decorateNodes(), 60);
+              setTimeout(()=>keepEndVisible(g.__data__), 80);
+            } else {
+              setTimeout(()=>keepEndVisible(g.__data__), 0);
+            }
           });
         });
       }
@@ -293,7 +288,6 @@
         if (!clean) return;
 
         const { root } = transformer.transform(clean);
-
         setHeaderFrom(root && root.content ? root.content : "");
 
         collapseBeyond(root, 0, MAX_LEVEL);
@@ -314,7 +308,7 @@
           paddingX: 18,
           nodeMinHeight: 26,
 
-          // KEY: give foreignObject enough width so level 0/1 pills never clip.
+          // give foreignObject enough width so pills never clip
           maxWidth: 520,
 
           initialExpandLevel: INIT_LEVEL,
