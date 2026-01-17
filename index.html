@@ -1,106 +1,105 @@
-<style>
-  /* Launch Button */
-  #vat-mm-open {
-    display: inline-flex;
-    align-items: center;
-    border: 2px solid #fff;
-    border-radius: 8px;
-    padding: 12px 24px;
-    font-weight: 800;
-    cursor: pointer;
-    background: #000;
-    color: #fff;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-
-  /* Fullscreen overlay - SOLID BLACK to hide ghost elements */
-  #vat-mm-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    z-index: 2147483647 !important; /* Maximum possible Z-index */
-    background: #0b0f14; 
-    display: none;
-  }
-  #vat-mm-overlay.vat-open { display: block; }
-
-  #vat-mm-iframe {
-    width: 100%;
-    height: 100%;
-    border: 0;
-    display: block;
-  }
-</style>
-
-<button id="vat-mm-open" type="button">Launch Interactive Mindmap</button>
-
-<div id="vat-mm-overlay">
-  <iframe id="vat-mm-iframe" title="VAT Mindmap"></iframe>
-</div>
-
-<script>
-(function(){
-  const VIEWER_URL = "https://peterlewis-create.github.io/vat-mindmap-viewer/";
-  const overlay = document.getElementById('vat-mm-overlay');
-  const iframe = document.getElementById('vat-mm-iframe');
-
-  const VAT_MINDMAP_MD = `# VAT on Animals, Food, and Catering (UK)
-## Food & Drink (Human consumption)
-### Live Animals
-#### Zero rated
-#### Standard Rated
-### Food for Human consumption
-#### General-Zero Rated
-#### Excepted Items (Standard Rated)
-#### Specialised Food
-### Catering and takeaway
-#### Catering per se (Standard-Rated)
-#### Hot Takeaway Food
-## Animal Feed
-### Animal Feed
-#### General Feed (Zero-Rated)
-#### Pet and Bird Food
-### Plants and Seeds
-#### Zero-Rated
-#### Standard-Rated
-### Services and Processes
-#### New Zero-rated good production
-#### Abattoir slaughtering only (Standard-Rated)
-#### Dressing carcasses (Zero-rated)
-#### Livery services (Standard-rated)`;
-
-  function sendData() {
-    if (iframe.contentWindow) {
-      iframe.contentWindow.postMessage({ 
-        type: 'VAT_SET', 
-        markdown: VAT_MINDMAP_MD 
-      }, '*');
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VAT Mindmap Viewer</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --text: #ffffff;
     }
-  }
-
-  document.getElementById('vat-mm-open').onclick = () => {
-    overlay.classList.add('vat-open');
-    document.body.style.overflow = 'hidden';
-    iframe.src = VIEWER_URL + "?v=" + Date.now();
-    iframe.onload = () => setTimeout(sendData, 400);
-  };
-
-  window.addEventListener('message', (ev) => {
-    if (ev.data.type === 'VAT_READY') sendData();
-    if (ev.data.type === 'VAT_CLOSE') {
-      overlay.classList.remove('vat-open');
-      document.body.style.overflow = '';
-      iframe.src = 'about:blank';
+    html, body { 
+      height: 100%; margin: 0; background: var(--bg); 
+      overflow: hidden; font-family: sans-serif; color: var(--text); 
     }
-  });
+    #svg { width: 100vw; height: 100vh; display: block; }
 
-  // ESC key listener
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      overlay.classList.remove('vat-open');
-      document.body.style.overflow = '';
-      iframe.src = 'about:blank';
+    /* Header & Toolbars - Fixed Z-Index to stay on top */
+    #header { position: fixed; top: 25px; left: 25px; z-index: 999; pointer-events: none; }
+    #title { font-size: 28px; font-weight: 800; margin: 0; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
+    #subtitle { font-size: 14px; color: rgba(255,255,255,0.8); margin-top: 5px; }
+    
+    #toolbar { position: fixed; top: 25px; right: 25px; z-index: 1000; display: flex; gap: 10px; pointer-events: auto; }
+    .tb-btn { 
+      background: #1f2937; /* Solid color for visibility */
+      border: 2px solid rgba(255,255,255,0.4); 
+      color: white; 
+      min-width: 44px; height: 44px; border-radius: 8px; 
+      cursor: pointer; font-weight: 800; font-size: 20px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-  });
-})();
-</script>
+    .tb-btn.text-btn { font-size: 14px; padding: 0 15px; width: auto; }
+    .tb-btn:hover { background: #374151; border-color: #fff; }
+
+    /* BOX READABILITY FIX */
+    .markmap-foreign {
+      background: #111827 !important; /* High contrast dark background */
+      border: 2px solid #3b82f6 !important; /* Bright blue border for clarity */
+      border-radius: 8px !important;
+      padding: 12px 20px !important; /* Much larger boxes */
+      color: #ffffff !important;
+      font-weight: 800 !important;
+      font-size: 16px !important; 
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+      white-space: nowrap; /* Prevents text bunching */
+    }
+    .markmap-foreign div { color: #ffffff !important; }
+    
+    .markmap-link { stroke: rgba(255,255,255,0.4) !important; stroke-width: 2.5px !important; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <div id="title">Taxonomy: Animals, Food, and Catering</div>
+    <div id="subtitle">Based on 179 sources</div>
+  </div>
+  <div id="toolbar">
+    <button class="tb-btn" id="zin">+</button>
+    <button class="tb-btn" id="zout">−</button>
+    <button class="tb-btn text-btn" id="reset">Resize</button>
+    <button class="tb-btn text-btn" id="close">Close</button>
+  </div>
+  <svg id="svg" class="markmap"></svg>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
+
+  <script>
+    (function () {
+      const { Transformer, Markmap } = window.markmap;
+      const svg = document.querySelector('#svg');
+      let mm = null;
+      const transformer = new Transformer();
+
+      window.addEventListener('message', (ev) => {
+        if (ev.data.type !== 'VAT_SET') return;
+        const { root } = transformer.transform(ev.data.markdown || '');
+        if (!mm) {
+          mm = Markmap.create(svg, {
+            autoFit: true,
+            spacingVertical: 60,   /* Adds significant height between lines */
+            spacingHorizontal: 160,
+          }, root);
+        } else {
+          mm.setData(root);
+          mm.fit();
+        }
+      });
+
+      // STOP PROPAGATION ensures clicks don't close the overlay
+      document.getElementById('zin').onclick = (e) => { e.stopPropagation(); mm.rescale(1.3); };
+      document.getElementById('zout').onclick = (e) => { e.stopPropagation(); mm.rescale(0.7); };
+      document.getElementById('reset').onclick = (e) => { e.stopPropagation(); mm.fit(); };
+      document.getElementById('close').onclick = (e) => { 
+        e.stopPropagation(); 
+        window.parent.postMessage({type:'VAT_CLOSE'}, '*'); 
+      };
+
+      window.parent.postMessage({ type: 'VAT_READY' }, '*');
+    })();
+  </script>
+</body>
+</html>
