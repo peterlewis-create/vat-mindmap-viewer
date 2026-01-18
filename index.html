@@ -12,22 +12,22 @@
     }
     html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
     #svg{ width:100vw; height:100vh; display:block; }
-    #toolbar{ position:fixed; top:18px; right:18px; z-index:60; display:flex; gap:10px; }
-    .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
+    #toolbar{ position:fixed; top:18px; right:18px; z-index:100; display:flex; gap:10px; }
+    .tb-btn{ background:rgba(40,40,40,0.8); border:1px solid rgba(255,255,255,0.3); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 15px; }
     
-    /* FIX: Ensures text is visible and clickable */
+    /* THE FIX: Ensures text is fully visible and clickable without being cut off */
     .markmap-foreign{ 
-      border-radius:8px !important; padding:8px 12px !important; 
+      border-radius:12px !important; padding:10px 16px !important; 
       font-size:16px !important; font-weight:800 !important; color:#fff !important; 
-      border:1px solid rgba(255,255,255,.1) !important; 
+      border:1px solid rgba(255,255,255,0.15) !important; 
       background: var(--nodeGrey);
       white-space: nowrap !important;
       display: flex !important;
       align-items: center !important;
+      pointer-events: none !important; /* Forces click to pass to the expansion logic */
     }
     
-    /* Clickable area fix */
-    g.markmap-node { cursor: pointer !important; }
+    g.markmap-node { cursor: pointer !important; pointer-events: all; }
 
     g.markmap-node[data-depth="0"] .markmap-foreign,
     g.markmap-node[data-depth="1"] .markmap-foreign,
@@ -36,17 +36,17 @@
     g.markmap-node[data-depth="4"] .markmap-foreign,
     g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
 
-    .mm-row{ display:flex; align-items:center; gap:10px; pointer-events: none; }
-    .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; }
+    .mm-row{ display:flex; align-items:center; gap:12px; }
+    .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:6px; }
     .markmap-node circle{ opacity:0 !important; }
-    .markmap-link{ stroke:rgba(140,155,170,.4) !important; stroke-width:3px !important; }
+    .markmap-link{ stroke:rgba(140,155,170,0.5) !important; stroke-width:3px !important; }
   </style>
 </head>
 <body>
   <div id="toolbar">
     <button class="tb-btn" id="zin">+</button>
     <button class="tb-btn" id="zout">−</button>
-    <button class="tb-btn" id="res">Resize</button>
+    <button class="tb-btn" id="res">Resize/Fit</button>
     <button class="tb-btn" id="cls">Close</button>
   </div>
   <svg id="svg" class="markmap"></svg>
@@ -83,15 +83,14 @@
         
         mm = Markmap.create(svg, {
           autoFit: true,
-          initialExpandLevel: 1,
-          spacingVertical: 100,
-          spacingHorizontal: 120,
-          duration: 400 
+          initialExpandLevel: 1, /* Starts with Level 2 ready to click */
+          spacingVertical: 110,
+          spacingHorizontal: 140,
+          duration: 350 
         }, root);
         
         decorate();
 
-        // FIX: Re-binding the click event directly to the node
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.stopPropagation();
           if (d.data.children) {
