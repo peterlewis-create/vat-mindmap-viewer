@@ -13,7 +13,6 @@
       --link:rgba(140,155,170,.35);
       --text:#ffffff;
     }
-
     html,body{
       height:100%;
       margin:0;
@@ -22,67 +21,34 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       color:var(--text);
     }
+    #svg{ width:100vw; height:100vh; display:block; background:var(--bg); }
 
-    #svg{
-      width:100vw;
-      height:100vh;
-      display:block;
-      background:var(--bg);
-    }
-
-    /* Header + toolbar are INSIDE the viewer iframe only */
-    #header{
-      position:fixed;
-      top:18px;
-      left:18px;
-      z-index:50;
-      pointer-events:none;
-    }
-    #title{
-      font-size:34px;
-      font-weight:900;
-      margin:0;
-      letter-spacing:.2px;
-    }
-    #subtitle{
-      margin-top:6px;
-      font-size:14px;
-      opacity:.8;
-      font-weight:600;
-    }
+    #header{ position:fixed; top:18px; left:18px; z-index:50; pointer-events:none; }
+    #title{ font-size:34px; font-weight:900; margin:0; letter-spacing:.2px; }
+    #subtitle{ margin-top:6px; font-size:14px; opacity:.85; font-weight:700; }
 
     #toolbar{
-      position:fixed;
-      top:18px;
-      right:18px;
-      z-index:100;
-      display:flex;
-      gap:10px;
-      pointer-events:auto;
+      position:fixed; top:18px; right:18px; z-index:100;
+      display:flex; gap:10px; pointer-events:auto;
     }
     .tb-btn{
       background:rgba(0,0,0,.25);
       border:1px solid rgba(255,255,255,.25);
       color:#fff;
-      height:40px;
-      min-width:40px;
+      height:40px; min-width:40px;
       border-radius:10px;
       font-weight:900;
       cursor:pointer;
-      display:flex;
-      align-items:center;
-      justify-content:center;
+      display:flex; align-items:center; justify-content:center;
       padding:0 12px;
       user-select:none;
     }
     .tb-btn:active{ transform: translateY(1px); }
 
-    /* --- Node styling: LLM-like compact rounded boxes --- */
+    /* Markmap styling */
     .markmap-node circle{ opacity:0 !important; }
     .markmap-link{ stroke:var(--link) !important; stroke-width:2px !important; }
 
-    /* Important: do NOT rewrite node HTML after layout; it causes clipping.
-       Instead, style the existing foreignObject and use CSS arrows via attributes. */
     .markmap-foreign{
       border-radius:10px !important;
       padding:8px 12px !important;
@@ -92,18 +58,16 @@
       border:1px solid rgba(255,255,255,.10) !important;
       line-height:1.25 !important;
 
-      /* wrap like the LLM screenshot (prevents huge wide boxes) */
+      /* LLM-like wrapping, avoids crazy wide boxes */
       white-space:normal !important;
       max-width:320px !important;
 
-      /* let clicks be handled by the node group, not the text layer */
+      /* clicks handled on node group */
       pointer-events:none !important;
-
       position:relative !important;
     }
     .markmap-foreign > div{ color:#fff !important; }
 
-    /* Depth colouring */
     g.markmap-node[data-depth="0"] .markmap-foreign,
     g.markmap-node[data-depth="1"] .markmap-foreign,
     g.markmap-node[data-depth="2"] .markmap-foreign{
@@ -116,9 +80,9 @@
       background:var(--nodeGreen) !important;
     }
 
-    /* LLM-like chevron indicator (CSS, no DOM rewriting) */
+    /* Chevron indicator (no DOM rewriting) */
     g.markmap-node[data-has="1"] .markmap-foreign::after{
-      content: "›";
+      content:"›";
       position:absolute;
       right:10px;
       top:50%;
@@ -126,23 +90,14 @@
       font-size:14px;
       font-weight:900;
       opacity:.9;
-      background:rgba(255,255,255,.10);
-      width:20px;
-      height:20px;
+      background:rgba(255,255,255,0.10);
+      width:20px; height:20px;
       border-radius:6px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
+      display:flex; align-items:center; justify-content:center;
     }
-    g.markmap-node[data-has="1"][data-fold="0"] .markmap-foreign::after{
-      content: "‹";
-    }
+    g.markmap-node[data-has="1"][data-fold="0"] .markmap-foreign::after{ content:"‹"; }
 
-    /* Click feel */
-    g.markmap-node{
-      cursor:pointer;
-      pointer-events:all;
-    }
+    g.markmap-node{ cursor:pointer; pointer-events:all; }
   </style>
 </head>
 
@@ -167,11 +122,90 @@
 
   <script>
     (function(){
-      const { Transformer, Markmap } = window.markmap;
-      const svg = document.getElementById('svg');
       const status = document.getElementById('status');
+      const svg = document.getElementById('svg');
+
+      const { Transformer, Markmap } = window.markmap;
       const transformer = new Transformer();
       let mm = null;
+      let gotData = false;
+
+      // Built-in fallback (used only if mindmap.md is missing AND no VAT_SET arrives)
+      const DEFAULT_MD = `# VAT on Animals, Food, and Catering (UK)
+## Food & Drink (Human consumption)
+### Live Animals
+#### Zero-Rated
+##### Human food species (meat/dairy)
+##### Honey bees
+##### Fish for food (salmon, trout, eels)
+##### Poultry and game birds
+##### Embryos for breeding
+#### Standard-Rated
+##### Pets (e.g. cage birds, tropical fish)
+##### Horses and racing pigeons
+##### Ornamental breeds
+##### Exotic meats (e.g. kangaroo)
+##### Bumble bees (pollination hire)
+### Food for Human Consumption
+#### General Zero-Rated
+##### Unprocessed meat, fish, fruit, veg
+##### Milk, tea, coffee, cocoa
+##### Bread, cakes, and non-chocolate biscuits
+##### Culinary herbs and spices
+#### Excepted Items (Standard-Rated)
+##### Ice cream and frozen desserts
+##### Confectionery and chocolate biscuits
+##### Alcoholic beverages
+##### Soft drinks and mineral water
+##### Savoury snacks (potato crisps, salted nuts)
+##### Sports nutrition drinks (Item 4A)
+#### Specialised Products
+##### Dietary supplements (Standard-rated)
+##### Medicines (Standard-rated)
+##### Enteral/Parenteral nutrition (Zero-rated)
+##### Diabetic/Hypoallergenic foods (Zero-rated)
+### Catering Services
+#### Catering per se (Standard-Rated)
+##### On-premises consumption
+##### Restaurants, cafes, and canteens
+##### Events and wedding receptions
+##### Service charges and tips
+#### Hot Takeaway Food
+##### Precondition: Food is hot when provided
+##### Test 1: Heated for hot consumption
+##### Test 2: Heated to order
+##### Test 3: Kept hot after heating
+##### Test 4: Heat retentive packaging
+##### Test 5: Marketed as hot
+## Animal Feed and Plants
+### Animal Feed Logic
+#### General Feed (Zero-Rated)
+##### Straights, compounds, concentrates
+##### Nutritional supplements
+##### Grazing rights
+#### Pet and Bird Food
+##### Canned/packaged/prepared (Standard-rated)
+##### Biscuits/meal for cats and dogs
+##### Packaged wild bird food
+##### Working dog food (Zero-rated if specific)
+### Plants and Seeds
+#### Zero-Rated
+##### Edible vegetables and fruit seeds
+##### Culinary herbs
+##### Agricultural crops for feed
+##### Grass seed
+#### Standard-Rated
+##### Ornamental plants and flowers
+##### Industrial crops (e.g. evening primrose)
+##### Plant growing kits
+##### Turf
+### Services and Processes
+#### New zero-rated goods production (Zero-rated)
+#### Abattoir slaughtering only (Standard-rated)
+#### Dressing carcasses (Zero-rated)
+#### Livery services (Standard-rated)`;
+
+      function setStatus(t){ status.textContent = t; }
 
       function safeFit(){
         if (!mm) return;
@@ -184,38 +218,30 @@
 
       function syncAttrs(){
         if (!mm || !mm.g) return;
-
         mm.g.selectAll('g.markmap-node')
           .attr('data-depth', d => String(d.depth ?? 0))
           .attr('data-has', d => (d.data?.children && d.data.children.length ? "1" : "0"))
           .attr('data-fold', d => (d.payload && d.payload.fold ? "1" : "0"));
       }
 
-      function setStatus(text){
-        status.textContent = text;
-      }
-
-      window.addEventListener('message', async (ev) => {
-        if (!ev.data || ev.data.type !== 'VAT_SET') return;
-
-        const md = String(ev.data.markdown || '').trim();
-        if (!md) { setStatus("No data received."); return; }
+      function renderMarkdown(md){
+        const clean = String(md || '').trim();
+        if (!clean) { setStatus("No data received."); return; }
 
         setStatus("Rendering…");
 
-        const { root } = transformer.transform(md);
+        const { root } = transformer.transform(clean);
 
         if (mm) { try { mm.destroy(); } catch(e){} mm = null; }
 
         mm = Markmap.create(svg, {
           autoFit: true,
-          initialExpandLevel: 2,     // default view: levels 1–2
-          spacingVertical: 24,       // compact like your LLM screenshot
-          spacingHorizontal: 120,    // tighter horizontally
+          initialExpandLevel: 2,
+          spacingVertical: 24,
+          spacingHorizontal: 120,
           duration: 0
         }, root);
 
-        // attach click to toggle fold/unfold
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.preventDefault();
           e.stopPropagation();
@@ -223,22 +249,53 @@
           await mm.toggleNode(d);
           syncAttrs();
           safeFit();
-          setStatus(`Expand level: ${Math.max(1, (d.depth ?? 0)+1)} (click nodes to drill down)`);
+          setStatus("Expand level: 2 (click nodes to drill down)");
         });
 
         syncAttrs();
         safeFit();
+
+        // tell parent we successfully rendered (stops the sender loop)
+        window.parent.postMessage({ type:'VAT_ACK' }, '*');
         setStatus("Expand level: 2 (click nodes to drill down)");
+      }
+
+      // Listen for data from Squarespace launcher
+      window.addEventListener('message', (ev) => {
+        if (!ev.data || ev.data.type !== 'VAT_SET') return;
+        gotData = true;
+        renderMarkdown(ev.data.markdown || '');
       });
 
-      // toolbar
+      // Toolbar
       document.getElementById('zin').addEventListener('click', (e) => { e.stopPropagation(); if (mm) mm.rescale(1.2); });
       document.getElementById('zout').addEventListener('click', (e) => { e.stopPropagation(); if (mm) mm.rescale(0.8); });
       document.getElementById('res').addEventListener('click', (e) => { e.stopPropagation(); safeFit(); });
       document.getElementById('cls').addEventListener('click', (e) => { e.stopPropagation(); window.parent.postMessage({type:'VAT_CLOSE'}, '*'); });
 
-      // signal ready to parent
-      window.parent.postMessage({ type:'VAT_READY' }, '*');
+      // Ready handshake (repeat to avoid race conditions)
+      function pingReady(){
+        window.parent.postMessage({ type:'VAT_READY' }, '*');
+      }
+      pingReady();
+      const readyTimer = setInterval(pingReady, 350);
+      setTimeout(() => clearInterval(readyTimer), 6000);
+
+      // Fallback: if no VAT_SET arrives, load mindmap.md (or default)
+      setTimeout(async () => {
+        if (gotData) return;
+        try {
+          setStatus("No message yet — loading mindmap.md…");
+          const r = await fetch('./mindmap.md?v=' + Date.now(), { cache: 'no-store' });
+          if (!r.ok) throw new Error("mindmap.md not found");
+          const md = await r.text();
+          renderMarkdown(md);
+        } catch (e) {
+          setStatus("No message yet — using built-in fallback…");
+          renderMarkdown(DEFAULT_MD);
+        }
+      }, 1200);
+
     })();
   </script>
 </body>
