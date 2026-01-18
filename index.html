@@ -3,26 +3,21 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>VAT Mindmap Engine</title>
+  <title>VAT Engine</title>
   <style>
     :root{ --bg:#1a1d21; --nodeGrey:#3f4956; --nodeGreen:#1f4a35; }
     html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
     #svg{ width:100vw; height:100vh; display:block; }
-    
-    /* Autonomous Toolbar - Controlled by GitHub for 100% reliability */
-    #toolbar{ position:fixed; top:20px; right:20px; z-index:1000; display:flex; gap:10px; }
-    .tb-btn{ background:rgba(60,60,60,0.9); border:1px solid rgba(255,255,255,0.3); color:#fff; height:42px; border-radius:8px; font-weight:900; cursor:pointer; padding:0 15px; display:flex; align-items:center; font-size: 14px; }
-
-    /* Mindmap Toggles and Expansion Logic */
-    .markmap-foreign{ border-radius:8px !important; padding:10px 15px !important; font-size:16px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; pointer-events: none !important; }
-    g.markmap-node { cursor: pointer; pointer-events: all; }
+    #toolbar{ position:fixed; top:20px; right:20px; z-index:9999; display:flex; gap:12px; }
+    .tb-btn{ background:rgba(0,0,0,0.8); border:1px solid rgba(255,255,255,0.4); color:#fff; height:44px; border-radius:10px; font-weight:900; cursor:pointer; padding:0 18px; display:flex; align-items:center; font-size:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+    .markmap-foreign{ border-radius:10px !important; padding:12px 18px !important; font-size:17px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.15) !important; white-space:nowrap !important; pointer-events: none !important; }
+    g.markmap-node { cursor: pointer !important; pointer-events: all !important; }
     g.markmap-node[data-depth="0"] .markmap-foreign, g.markmap-node[data-depth="1"] .markmap-foreign, g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
     g.markmap-node[data-depth="3"] .markmap-foreign, g.markmap-node[data-depth="4"] .markmap-foreign, g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
-
-    .mm-row{ display:flex; align-items:center; gap:8px; }
-    .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:4px; }
+    .mm-row{ display:flex; align-items:center; gap:10px; }
+    .mm-chev{ font-size:16px; font-weight:900; background:rgba(255,255,255,0.2); width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:6px; }
     .markmap-node circle{ opacity:0 !important; }
-    .markmap-link{ stroke:rgba(140,155,170,.4) !important; stroke-width:2px !important; }
+    .markmap-link{ stroke:rgba(140,155,170,.5) !important; stroke-width:3px !important; }
   </style>
 </head>
 <body>
@@ -33,91 +28,15 @@
     <button class="tb-btn" id="cls">Close Map</button>
   </div>
   <svg id="svg" class="markmap"></svg>
-
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
-
   <script>
     (function(){
       const { Transformer, Markmap } = window.markmap;
       const svg = document.getElementById('svg');
       const transformer = new Transformer();
       let mm = null;
-
-      const MD = `# VAT on Animals, Food, and Catering (UK)
-## Food & Drink Section
-### Live Animals (Human Species)
-#### Zero-Rated
-##### Human food species (meat/dairy)
-##### Honey bees
-##### Fish for food (salmon, trout, eels)
-##### Poultry and game birds
-##### Embryos for breeding
-#### Standard-Rated
-##### Pets (e.g. cage birds, tropical fish)
-##### Horses and racing pigeons
-##### Ornamental breeds
-##### Exotic meats (e.g. kangaroo)
-##### Bumble bees (pollination hire)
-### Food Products Taxonomy
-#### General Zero-Rated
-##### Unprocessed meat, fish, fruit, veg
-##### Milk, tea, coffee, cocoa
-##### Bread, cakes, and non-chocolate biscuits
-##### Culinary herbs and spices
-#### Excepted Items (Standard-Rated)
-##### Ice cream and frozen desserts
-##### Confectionery and chocolate biscuits
-##### Alcoholic beverages
-##### Soft drinks and mineral water
-##### Savoury snacks (potato crisps, salted nuts)
-##### Sports nutrition drinks (Item 4A)
-#### Specialised VAT Treatment
-##### Dietary supplements (Standard-rated)
-##### Medicines (Standard-rated)
-##### Enteral/Parenteral nutrition (Zero-rated)
-##### Diabetic/Hypoallergenic foods (Zero-rated)
-### Catering & Hot Food Sector
-#### Catering per se (Standard-Rated)
-##### On-premises consumption
-##### Restaurants, cafes, and canteens
-##### Events and wedding receptions
-##### Service charges and tips
-#### Hot Takeaway Food
-##### Precondition: Food is hot when provided
-##### Test 1: Heated for hot consumption
-##### Test 2: Heated to order
-##### Test 3: Kept hot after heating
-##### Test 4: Heat retentive packaging
-##### Test 5: Marketed as hot
-## Animal Feed & Plants Sector
-### Animal Feed & Feedstuffs logic
-#### General Feed (Zero-Rated)
-##### Straights, compounds, concentrates
-##### Nutritional supplements
-##### Grazing rights
-#### Pet and Bird Food
-##### Canned/packaged/prepared (Standard-rated)
-##### Biscuits/meal for cats and dogs
-##### Packaged wild bird food
-##### Working dog food (Zero-rated if specific)
-### Plants & Seeds logic
-#### Zero-Rated
-##### Edible vegetables and fruit seeds
-##### Culinary herbs
-##### Agricultural crops for feed
-##### Grass seed
-#### Standard-Rated
-##### Ornamental plants and flowers
-##### Industrial crops (e.g. evening primrose)
-##### Plant growing kits
-##### Turf
-### Services and Processes logic
-#### New zero-rated goods production (Zero-rated)
-#### Abattoir slaughtering only (Standard-rated)
-#### Dressing carcasses (Zero-rated)
-#### Livery services (Standard-rated)`;
 
       function decorate(){
         mm.g.selectAll('g.markmap-node').attr('data-depth', d => d.depth);
@@ -133,23 +52,29 @@
         });
       }
 
-      function init(){
-        const { root } = transformer.transform(MD);
+      window.addEventListener('message', (ev) => {
+        if (ev.data.type !== 'VAT_SET') return;
+        const root = transformer.transform(ev.data.markdown).root;
         if (mm) mm.destroy();
-        mm = Markmap.create(svg, { autoFit: true, initialExpandLevel: 1, spacingVertical: 100, spacingHorizontal: 150 }, root);
+        mm = Markmap.create(svg, { 
+          autoFit: true, 
+          initialExpandLevel: 1, 
+          spacingVertical: 110, 
+          spacingHorizontal: 160, 
+          duration: 400 
+        }, root);
         decorate();
-        // SYSTEM LEVEL FIX: Direct binding ensures clicks reach expansion logic every time
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.stopPropagation();
           if (d.data.children) { await mm.toggleNode(d); decorate(); }
         });
-      }
+      });
 
-      init();
-      document.getElementById('zin').onclick = () => mm.rescale(1.2);
+      document.getElementById('zin').onclick = () => mm.rescale(1.25);
       document.getElementById('zout').onclick = () => mm.rescale(0.8);
       document.getElementById('res').onclick = () => mm.fit();
       document.getElementById('cls').onclick = () => window.parent.postMessage({type:'VAT_CLOSE'}, '*');
+      window.parent.postMessage({type:'VAT_READY'}, '*');
     })();
   </script>
 </body>
