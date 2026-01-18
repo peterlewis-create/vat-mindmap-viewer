@@ -12,8 +12,6 @@
     }
     html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
     #svg{ width:100vw; height:100vh; display:block; }
-    #header{ position:fixed; top:18px; left:18px; z-index:50; pointer-events:none; }
-    #title{ font-size:34px; font-weight:900; margin:0; }
     #toolbar{ position:fixed; top:18px; right:18px; z-index:60; display:flex; gap:10px; }
     .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
     
@@ -29,4 +27,71 @@
     .mm-row{ display:flex; align-items:center; gap:8px; }
     .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; }
     .markmap-node circle{ opacity:0 !important; }
-    .markmap-link{ stroke:rgba(140,155,170,.3) !important
+    .markmap-link{ stroke:rgba(140,155,170,.3) !important; stroke-width:2px !important; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button class="tb-btn" id="zin">+</button>
+    <button class="tb-btn" id="zout">−</button>
+    <button class="tb-btn" id="res">Resize</button>
+    <button class="tb-btn" id="cls">Close</button>
+  </div>
+  <svg id="svg" class="markmap"></svg>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
+
+  <script>
+    (function(){
+      const { Transformer, Markmap } = window.markmap;
+      const svg = document.getElementById('svg');
+      const transformer = new Transformer();
+      let mm = null;
+
+      function decorate(){
+        mm.g.selectAll('g.markmap-node').attr('data-depth', d => d.depth);
+        mm.g.selectAll('g.markmap-node').each(function(d){
+          const div = d3.select(this).select('foreignObject > div');
+          if (div.empty() || div.select('.mm-row').size()) return;
+          const txt = d.data.content; div.html('');
+          const row = div.append('div').attr('class','mm-row');
+          row.append('span').text(txt);
+          if (d.data.children && d.data.children.length) row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
+        });
+      }
+
+      window.addEventListener('message', (ev) => {
+        if (ev.data.type !== 'VAT_SET') return;
+        const root = transformer.transform(ev.data.markdown).root;
+        if (mm) mm.destroy();
+        
+        mm = Markmap.create(svg, {
+          autoFit: true,
+          initialExpandLevel: 2,
+          spacingVertical: 95, /* Surgical fix: Higher spacing to ensure clickable rows */
+          spacingHorizontal: 160,
+          duration: 0 
+        }, root);
+        
+        decorate();
+        
+        mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
+          e.stopPropagation();
+          if (d.data.children) {
+            await mm.toggleNode(d);
+            decorate();
+          }
+        });
+      });
+
+      document.getElementById('zin').onclick = () => mm.rescale(1.2);
+      document.getElementById('zout').onclick = () => mm.rescale(0.8);
+      document.getElementById('res').onclick = () => mm.fit();
+      document.getElementById('cls').onclick = () => window.parent.postMessage({type:'VAT_CLOSE'}, '*');
+      window.parent.postMessage({type:'VAT_READY'}, '*');
+    })();
+  </script>
+</body>
+</html>
