@@ -13,12 +13,21 @@
     #toolbar{ position:fixed; top:18px; right:18px; z-index:100; display:flex; gap:10px; }
     .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
     
-    /* SURGICAL FIX: Ensures clicking the text triggers the expansion logic */
-    .markmap-foreign{ border-radius:8px !important; padding:8px 12px !important; font-size:15px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; pointer-events: none !important; }
+    /* SURGICAL FIX: Allows clicks to pass through text to the expansion logic */
+    .markmap-foreign{ 
+      border-radius:8px !important; padding:8px 12px !important; 
+      font-size:15px !important; font-weight:800 !important; color:#fff !important; 
+      border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; 
+      pointer-events: none !important; 
+    }
     
     g.markmap-node { cursor: pointer; pointer-events: all; }
-    g.markmap-node[data-depth="0"] .markmap-foreign, g.markmap-node[data-depth="1"] .markmap-foreign, g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
-    g.markmap-node[data-depth="3"] .markmap-foreign, g.markmap-node[data-depth="4"] .markmap-foreign, g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
+    g.markmap-node[data-depth="0"] .markmap-foreign, 
+    g.markmap-node[data-depth="1"] .markmap-foreign, 
+    g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
+    g.markmap-node[data-depth="3"] .markmap-foreign, 
+    g.markmap-node[data-depth="4"] .markmap-foreign, 
+    g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
 
     .mm-row{ display:flex; align-items:center; gap:8px; }
     .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; }
@@ -28,17 +37,25 @@
 </head>
 <body>
   <div id="header"><div id="title">Taxonomy: Animals, Food, and Catering</div></div>
-  <div id="toolbar"><button class="tb-btn" id="zin">+</button><button class="tb-btn" id="zout">−</button><button class="tb-btn" id="res">Resize</button><button class="tb-btn" id="cls">Close</button></div>
+  <div id="toolbar">
+    <button class="tb-btn" id="zin">+</button>
+    <button class="tb-btn" id="zout">−</button>
+    <button class="tb-btn" id="res">Resize</button>
+    <button class="tb-btn" id="cls">Close</button>
+  </div>
   <svg id="svg" class="markmap"></svg>
+
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
+
   <script>
     (function(){
       const { Transformer, Markmap } = window.markmap;
       const svg = document.getElementById('svg');
       const transformer = new Transformer();
       let mm = null;
+
       function decorate(){
         mm.g.selectAll('g.markmap-node').attr('data-depth', d => d.depth);
         mm.g.selectAll('g.markmap-node').each(function(d){
@@ -50,23 +67,32 @@
           if (d.data.children && d.data.children.length) row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
         });
       }
+
       window.addEventListener('message', (ev) => {
         if (ev.data.type !== 'VAT_SET') return;
         const root = transformer.transform(ev.data.markdown).root;
         if (mm) mm.destroy();
-        mm = Markmap.create(svg, { 
-          autoFit: true, 
-          initialExpandLevel: 2, 
-          spacingVertical: 95, 
-          spacingHorizontal: 160, 
+        
+        mm = Markmap.create(svg, {
+          autoFit: true,
+          initialExpandLevel: 2,
+          /* FIX: Ensure enough vertical space so Level 3 nodes don't overlap */
+          spacingVertical: 100,
+          spacingHorizontal: 160,
           duration: 0 
         }, root);
+        
         decorate();
+        
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.stopPropagation();
-          if (d.data.children) { await mm.toggleNode(d); decorate(); }
+          if (d.data.children) {
+            await mm.toggleNode(d);
+            decorate();
+          }
         });
       });
+
       document.getElementById('zin').onclick = () => mm.rescale(1.2);
       document.getElementById('zout').onclick = () => mm.rescale(0.8);
       document.getElementById('res').onclick = () => mm.fit();
