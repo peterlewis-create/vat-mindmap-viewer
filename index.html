@@ -9,10 +9,10 @@
     html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
     #svg{ width:100vw; height:100vh; display:block; }
     #toolbar{ position:fixed; top:18px; right:18px; z-index:100; display:flex; gap:10px; }
-    .tb-btn{ background:rgba(0,0,0,.4); border:1px solid rgba(255,255,255,.3); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 15px; }
+    .tb-btn{ background:rgba(0,0,0,.3); border:1px solid rgba(255,255,255,.3); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 15px; }
     
-    /* FIX: Ensures text boxes don't block the click from reaching the toggle engine */
-    .markmap-foreign{ border-radius:8px !important; padding:10px 14px !important; font-size:16px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; pointer-events: none !important; }
+    /* FIX: Ensures the click instruction passes through the text to the expansion engine */
+    .markmap-foreign{ border-radius:8px !important; padding:10px 14px !important; font-size:15px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; pointer-events: none !important; }
     
     g.markmap-node { cursor: pointer !important; pointer-events: all !important; }
 
@@ -22,14 +22,14 @@
     .mm-row{ display:flex; align-items:center; gap:8px; }
     .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:4px; }
     .markmap-node circle{ opacity:0 !important; }
-    .markmap-link{ stroke:rgba(140,155,170,.4) !important; stroke-width:2px !important; }
+    .markmap-link{ stroke:rgba(140,155,170,.3) !important; stroke-width:3px !important; }
   </style>
 </head>
 <body>
   <div id="toolbar">
     <button class="tb-btn" id="zin">+</button>
     <button class="tb-btn" id="zout">−</button>
-    <button class="tb-btn" id="res">Fit</button>
+    <button class="tb-btn" id="res">Resize/Fit</button>
     <button class="tb-btn" id="cls">Close</button>
   </div>
   <svg id="svg" class="markmap"></svg>
@@ -66,14 +66,15 @@
         
         mm = Markmap.create(svg, {
           autoFit: true,
-          initialExpandLevel: 2,
+          initialExpandLevel: 1, // Starts with Level 2 open
           spacingVertical: 100,
           spacingHorizontal: 160,
-          duration: 300 
+          duration: 350 
         }, root);
         
         decorate();
         
+        // FORCED TOGGLE BINDING: Fixes "no 3rd level" expansion
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.stopPropagation();
           if (d.data.children) {
