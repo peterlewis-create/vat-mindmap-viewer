@@ -41,7 +41,7 @@
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">All nodes are independent. Click any node to toggle expansion.</div>
+    <div id="subtitle">Click any node to toggle. Reset only on Resize.</div>
   </div>
   <div id="toolbar">
     <button class="tb-btn" id="plus">+</button>
@@ -81,14 +81,14 @@
           }
         });
 
-        // REWRITTEN CLICK HANDLER: No dependencies, just direct toggle
+        /* SURGICAL TOGGLE: Prevents Level 2 resets */
         mm.g.selectAll('g.markmap-node').on('click.vat', async (event, d) => {
           event.preventDefault(); event.stopPropagation();
           if (d && d.children && d.children.length) {
-            // Force toggle regardless of any other node state
+            // Only toggle the specific node clicked
             await mm.toggleNode(d);
             decorateNodes();
-            // Surgical focus on the specific branch
+            // Lock camera on the branch without global refitting
             await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
           }
         });
@@ -98,23 +98,25 @@
         if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
         const out = transformer.transform(String(ev.data.markdown || ''));
         baseRoot = out.root;
-        if (mm) {
-           mm.destroy(); // Completely clear old map state to prevent logic ghosting
-           while(svg.firstChild) svg.removeChild(svg.firstChild);
-        }
+        if (mm) { mm.destroy(); while(svg.firstChild) svg.removeChild(svg.firstChild); }
         mm = Markmap.create(svg, { 
-           autoFit: true, 
-           initialExpandLevel: 2, 
-           spacingVertical: 45, 
-           spacingHorizontal: 110, 
-           paddingX: 16 
+          autoFit: true, 
+          initialExpandLevel: 2, 
+          spacingVertical: 45, 
+          spacingHorizontal: 110, 
+          paddingX: 16 
         }, baseRoot);
         decorateNodes();
       });
 
       document.getElementById('plus').onclick = (e) => { e.stopPropagation(); mm.rescale(1.2); };
       document.getElementById('minus').onclick = (e) => { e.stopPropagation(); mm.rescale(0.8); };
-      document.getElementById('resize').onclick = (e) => { e.stopPropagation(); mm.fit(); };
+      document.getElementById('resize').onclick = (e) => { 
+        e.stopPropagation(); 
+        // Manual reset only when user clicks "Resize"
+        mm.setData(baseRoot); 
+        mm.fit(); 
+      };
       document.getElementById('close').onclick = (e) => { window.parent.postMessage({ type:'VAT_CLOSE' }, '*'); };
       window.parent.postMessage({ type:'VAT_READY' }, '*');
     })();
