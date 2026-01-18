@@ -41,7 +41,7 @@
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">Each branch works independently. No auto-resetting.</div>
+    <div id="subtitle">Manual branch control active. Nodes will not auto-collapse.</div>
   </div>
   <div id="toolbar">
     <button class="tb-btn" id="plus">+</button>
@@ -50,15 +50,33 @@
     <button class="tb-btn text" id="close">Close</button>
   </div>
   <svg id="svg" class="markmap"></svg>
+
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
+
   <script>
     (function(){
       const { Transformer, Markmap } = window.markmap;
       const svg = document.getElementById('svg');
       const transformer = new Transformer();
       let mm = null;
+      let baseRoot = null;
+
+      // Track open/closed state of every node by its content string
+      const nodeStates = new Map();
+
+      function updateFoldState(node) {
+        if (node.children && node.children.length > 0) {
+          // If we haven't tracked this node yet, default it to folded (except top levels)
+          if (!nodeStates.has(node.content)) {
+            nodeStates.set(node.content, node.depth > 1);
+          }
+          node.payload = node.payload || {};
+          node.payload.fold = nodeStates.get(node.content);
+          node.children.forEach(updateFoldState);
+        }
+      }
 
       function decorateNodes(){
         if (!mm || !mm.g) return;
@@ -75,46 +93,57 @@
           const row = div.select('.mm-row');
           row.select('.mm-chev').remove();
           if (d.children && d.children.length) {
-             const isFolded = d.payload && d.payload.fold;
+             const isFolded = nodeStates.get(d.content);
              row.append('span').attr('class','mm-chev').text(isFolded ? '>' : '<');
           }
         });
 
-        /* THE INDEPENDENT CLICK FIX: No global fits */
-        mm.g.selectAll('g.markmap-node').on('click.vat', async (event, d) => {
-          event.preventDefault(); 
-          event.stopPropagation();
-          if (d && d.children && d.children.length) {
-            // Step 1: Toggle the specific node
-            await mm.toggleNode(d);
-            // Step 2: Redraw chevrons
-            decorateNodes();
-            // Step 3: Move ONLY to that node, do not zoom out or fit all
-            await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
+        // CUSTOM CLICK HANDLER: Manually toggle our state map and re-render
+        mm.g.selectAll('g.markmap-node').on('click.vat', (event, d) => {
+          event.preventDefault(); event.stopPropagation();
+          if (d.children && d.children.length > 0) {
+            const currentState = nodeStates.get(d.content);
+            nodeStates.set(d.content, !currentState);
+            renderMap(); // Force re-render with the new manual state
           }
         });
+      }
+
+      function renderMap() {
+        if (!baseRoot) return;
+        const rootCopy = JSON.parse(JSON.stringify(baseRoot));
+        updateFoldState(rootCopy);
+        
+        if (mm) {
+          mm.setData(rootCopy);
+        } else {
+          mm = Markmap.create(svg, {
+            autoFit: false,
+            spacingVertical: 45,
+            spacingHorizontal: 110,
+            paddingX: 16
+          }, rootCopy);
+          mm.fit();
+        }
+        decorateNodes();
       }
 
       window.addEventListener('message', (ev)=>{
         if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
         const out = transformer.transform(String(ev.data.markdown || ''));
-        if (mm) { mm.destroy(); while(svg.firstChild) svg.removeChild(svg.firstChild); }
-        mm = Markmap.create(svg, { 
-          autoFit: true, 
-          initialExpandLevel: 2, 
-          spacingVertical: 45, 
-          spacingHorizontal: 110, 
-          paddingX: 16,
-          // Disable auto-fit on data changes
-          autoFit: false
-        }, out.root);
-        decorateNodes();
-        mm.fit(); // Only fit once on initial load
+        baseRoot = out.root;
+        nodeStates.clear(); // Reset states for new data
+        renderMap();
       });
 
       document.getElementById('plus').onclick = (e) => { e.stopPropagation(); mm.rescale(1.25); };
       document.getElementById('minus').onclick = (e) => { e.stopPropagation(); mm.rescale(0.8); };
-      document.getElementById('resize').onclick = (e) => { e.stopPropagation(); mm.fit(); };
+      document.getElementById('resize').onclick = (e) => { 
+        e.stopPropagation(); 
+        nodeStates.clear(); // Reset all branches to closed
+        renderMap();
+        mm.fit(); 
+      };
       document.getElementById('close').onclick = (e) => { 
         window.parent.postMessage({ type:'VAT_CLOSE' }, '*'); 
       };
