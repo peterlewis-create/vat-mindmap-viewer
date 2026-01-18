@@ -1,78 +1,210 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>VAT Mindmap Viewer</title>
-  <style>
-    :root{ --bg:#323437; --nodeGrey:#3f4956; --nodeGreen:#1f4a35; }
-    html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
-    #svg{ width:100vw; height:100vh; display:block; }
-    #header{ position:fixed; top:18px; left:18px; z-index:50; pointer-events:none; }
-    #title{ font-size:34px; font-weight:900; margin:0; }
-    #toolbar{ position:fixed; top:18px; right:18px; z-index:100; display:flex; gap:10px; }
-    .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
-    
-    /* SURGICAL FIX: Ensures clicking the text triggers the expansion logic */
-    .markmap-foreign{ border-radius:8px !important; padding:8px 12px !important; font-size:15px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; pointer-events: none !important; }
-    
-    g.markmap-node { cursor: pointer; pointer-events: all; }
-    g.markmap-node[data-depth="0"] .markmap-foreign, g.markmap-node[data-depth="1"] .markmap-foreign, g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
-    g.markmap-node[data-depth="3"] .markmap-foreign, g.markmap-node[data-depth="4"] .markmap-foreign, g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
+<style>
+  /* 1. BUTTON & OVERLAY LAYOUT */
+  #vat-mm-open {
+    display: inline-flex; align-items: center; padding: 10px 16px; 
+    background: rgba(0,0,0,.55); color: #fff; border: 2px solid rgba(255,255,255,.7); 
+    border-radius: 10px; font-weight: 900; cursor: pointer; margin-left: 280px;
+    font-family: sans-serif;
+  }
+  @media (max-width: 768px) { #vat-mm-open { margin-left: 0; } }
 
-    .mm-row{ display:flex; align-items:center; gap:8px; }
-    .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; }
-    .markmap-node circle{ opacity:0 !important; }
-    .markmap-link{ stroke:rgba(140,155,170,.3) !important; stroke-width:2px !important; }
-  </style>
-</head>
-<body>
-  <div id="header"><div id="title">Taxonomy: Animals, Food, and Catering</div></div>
-  <div id="toolbar"><button class="tb-btn" id="zin">+</button><button class="tb-btn" id="zout">−</button><button class="tb-btn" id="res">Resize</button><button class="tb-btn" id="cls">Close</button></div>
-  <svg id="svg" class="markmap"></svg>
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
-  <script>
-    (function(){
-      const { Transformer, Markmap } = window.markmap;
-      const svg = document.getElementById('svg');
-      const transformer = new Transformer();
-      let mm = null;
-      function decorate(){
-        mm.g.selectAll('g.markmap-node').attr('data-depth', d => d.depth);
-        mm.g.selectAll('g.markmap-node').each(function(d){
-          const div = d3.select(this).select('foreignObject > div');
-          if (div.empty() || div.select('.mm-row').size()) return;
-          const txt = d.data.content; div.html('');
-          const row = div.append('div').attr('class','mm-row');
-          row.append('span').text(txt);
-          if (d.data.children && d.data.children.length) row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
-        });
+  #vat-mm-overlay {
+    position: fixed !important; inset: 0 !important; z-index: 2147483647 !important;
+    background: #0b0f14 !important; display: none; overflow: hidden;
+  }
+  #vat-mm-overlay.vat-open { display: block !important; }
+
+  /* 2. TOP TOOLBAR */
+  #vat-toolbar { 
+    position: absolute; top: 20px; right: 20px; z-index: 2147483648; 
+    display: flex; gap: 10px; 
+  }
+  .tb-btn { 
+    background: rgba(60,60,60,0.9); border: 1px solid rgba(255,255,255,0.3); 
+    color: #fff; height: 40px; border-radius: 10px; font-weight: 900; 
+    cursor: pointer; padding: 0 15px; display: flex; align-items: center; justify-content: center;
+  }
+
+  /* 3. MINDMAP DISPLAY & CLICK LOGIC */
+  #vat-svg-container { width: 100%; height: 100%; position: relative; }
+  #vat-svg { width: 100%; height: 100%; background: #0b0f14; display: block; }
+  
+  .markmap-foreign { 
+    border-radius: 8px !important; padding: 8px 12px !important; 
+    font-size: 16px !important; font-weight: 800 !important; color: #fff !important; 
+    border: 1px solid rgba(255,255,255,.1) !important; white-space: nowrap !important;
+    pointer-events: none !important; /* Passes click directly to the toggle engine */
+  }
+
+  /* Depth Colors */
+  g.markmap-node[data-depth="0"] .markmap-foreign,
+  g.markmap-node[data-depth="1"] .markmap-foreign,
+  g.markmap-node[data-depth="2"] .markmap-foreign { background: #3f4956 !important; }
+  g.markmap-node[data-depth="3"] .markmap-foreign,
+  g.markmap-node[data-depth="4"] .markmap-foreign,
+  g.markmap-node[data-depth="5"] .markmap-foreign { background: #1f4a35 !important; }
+
+  .mm-row { display: flex; align-items: center; gap: 8px; }
+  .mm-chev { 
+    font-size: 14px; font-weight: 900; background: rgba(255,255,255,0.1); 
+    width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 4px; 
+  }
+  .markmap-node circle { opacity: 0 !important; }
+  .markmap-link { stroke: rgba(140,155,170,.4) !important; stroke-width: 2px !important; }
+</style>
+
+<button id="vat-mm-open" type="button">Mindmap</button>
+
+<div id="vat-mm-overlay">
+  <div id="vat-toolbar">
+    <button class="tb-btn" id="vat-zin">+</button>
+    <button class="tb-btn" id="vat-zout">−</button>
+    <button class="tb-btn" id="vat-res">Resize/Fit</button>
+    <button class="tb-btn" id="vat-cls">Close</button>
+  </div>
+  <div id="vat-svg-container">
+    <svg id="vat-svg" class="markmap"></svg>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
+
+<script>
+(function(){
+  const { Transformer, Markmap } = window.markmap;
+  const svg = document.getElementById('vat-svg');
+  const transformer = new Transformer();
+  let mm = null;
+
+  /* FULL TAXONOMY - Unique names for every Level 3 branch */
+  const MD = `# VAT on Animals, Food, and Catering (UK)
+## Food & Drink (Human consumption)
+### Live Animals (Human Species)
+#### Zero-Rated
+##### Human food species (meat/dairy)
+##### Honey bees
+##### Fish for food (salmon, trout, eels)
+##### Poultry and game birds
+##### Embryos for breeding
+#### Standard-Rated
+##### Pets (e.g. cage birds, tropical fish)
+##### Horses and racing pigeons
+##### Ornamental breeds
+##### Exotic meats (e.g. kangaroo)
+##### Bumble bees (pollination hire)
+### Food Items & Groceries
+#### General Zero-Rated
+##### Unprocessed meat, fish, fruit, veg
+##### Milk, tea, coffee, cocoa
+##### Bread, cakes, and non-chocolate biscuits
+##### Culinary herbs and spices
+#### Excepted Items (Standard-Rated)
+##### Ice cream and frozen desserts
+##### Confectionery and chocolate biscuits
+##### Alcoholic beverages
+##### Soft drinks and mineral water
+##### Savoury snacks (potato crisps, salted nuts)
+##### Sports nutrition drinks (Item 4A)
+#### Specialised Products
+##### Dietary supplements (Standard-rated)
+##### Medicines (Standard-rated)
+##### Enteral/Parenteral nutrition (Zero-rated)
+##### Diabetic/Hypoallergenic foods (Zero-rated)
+### Catering & Takeaway Logic
+#### Catering per se (Standard-Rated)
+##### On-premises consumption
+##### Restaurants, cafes, and canteens
+##### Events and wedding receptions
+##### Service charges and tips
+#### Hot Takeaway Food
+##### Precondition: Food is hot when provided
+##### Test 1: Heated for hot consumption
+##### Test 2: Heated to order
+##### Test 3: Kept hot after heating
+##### Test 4: Heat retentive packaging
+##### Test 5: Marketed as hot
+## Animal Feed and Plants
+### Animal Feed Logic & Straights
+#### General Feed (Zero-Rated)
+##### Straights, compounds, concentrates
+##### Nutritional supplements
+##### Grazing rights
+#### Pet and Bird Food
+##### Canned/packaged/prepared (Standard-rated)
+##### Biscuits/meal for cats and dogs
+##### Packaged wild bird food
+##### Working dog food (Zero-rated if specific)
+### Plants & Seeds Taxonomy
+#### Zero-Rated
+##### Edible vegetables and fruit seeds
+##### Culinary herbs
+##### Agricultural crops for feed
+##### Grass seed
+#### Standard-Rated
+##### Ornamental plants and flowers
+##### Industrial crops (e.g. evening primrose)
+##### Plant growing kits
+##### Turf
+### Services and Processes Logic
+#### New zero-rated goods production (Zero-rated)
+#### Abattoir slaughtering only (Standard-rated)
+#### Dressing carcasses (Zero-rated)
+#### Livery services (Standard-rated)`;
+
+  function decorate(){
+    mm.g.selectAll('g.markmap-node').attr('data-depth', d => d.depth);
+    mm.g.selectAll('g.markmap-node').each(function(d){
+      const div = d3.select(this).select('foreignObject > div');
+      if (div.empty() || div.select('.mm-row').size()) return;
+      const txt = d.data.content; div.html('');
+      const row = div.append('div').attr('class','mm-row');
+      row.append('span').text(txt);
+      if (d.data.children && d.data.children.length) {
+        row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
       }
-      window.addEventListener('message', (ev) => {
-        if (ev.data.type !== 'VAT_SET') return;
-        const root = transformer.transform(ev.data.markdown).root;
-        if (mm) mm.destroy();
-        mm = Markmap.create(svg, { 
-          autoFit: true, 
-          initialExpandLevel: 2, 
-          spacingVertical: 95, 
-          spacingHorizontal: 160, 
-          duration: 0 
-        }, root);
+    });
+  }
+
+  function initMap() {
+    const { root } = transformer.transform(MD);
+    if (mm) mm.destroy();
+    
+    mm = Markmap.create(svg, {
+      autoFit: true,
+      initialExpandLevel: 1, 
+      spacingVertical: 100, /* Fixes vertical overlap between middle rows */
+      spacingHorizontal: 140,
+      duration: 300 
+    }, root);
+
+    // DIRECT SVG EVENT BINDING (Bypasses Squarespace pointer interference)
+    mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
+      e.stopPropagation();
+      if (d.data.children) {
+        await mm.toggleNode(d);
         decorate();
-        mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
-          e.stopPropagation();
-          if (d.data.children) { await mm.toggleNode(d); decorate(); }
-        });
-      });
-      document.getElementById('zin').onclick = () => mm.rescale(1.2);
-      document.getElementById('zout').onclick = () => mm.rescale(0.8);
-      document.getElementById('res').onclick = () => mm.fit();
-      document.getElementById('cls').onclick = () => window.parent.postMessage({type:'VAT_CLOSE'}, '*');
-      window.parent.postMessage({type:'VAT_READY'}, '*');
-    })();
-  </script>
-</body>
-</html>
+      }
+    });
+
+    decorate();
+  }
+
+  // INTERFACE HANDLERS
+  document.getElementById('vat-mm-open').onclick = () => {
+    document.getElementById('vat-mm-overlay').classList.add('vat-open');
+    document.body.style.overflow = 'hidden';
+    initMap();
+  };
+
+  document.getElementById('vat-cls').onclick = () => {
+    document.getElementById('vat-mm-overlay').classList.remove('vat-open');
+    document.body.style.overflow = '';
+  };
+  
+  document.getElementById('vat-res').onclick = () => mm.fit();
+  document.getElementById('vat-zin').onclick = () => mm.rescale(1.2);
+  document.getElementById('vat-zout').onclick = () => mm.rescale(0.8);
+})();
+</script>
