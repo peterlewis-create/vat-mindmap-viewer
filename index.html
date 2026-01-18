@@ -4,45 +4,161 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
-  <style>
-    :root{ --bg:#323437; --nodeGrey:#3f4956; --nodeGreen:#1f4a35; }
-    html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
-    #svg{ width:100vw; height:100vh; display:block; }
-    #header{ position:fixed; top:18px; left:18px; z-index:50; pointer-events:none; }
-    #title{ font-size:34px; font-weight:900; margin:0; }
-    #toolbar{ position:fixed; top:18px; right:18px; z-index:100; display:flex; gap:10px; }
-    .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
-    
-    /* SURGICAL FIX: Allows clicks to pass through text to the expansion logic */
-    .markmap-foreign{ 
-      border-radius:8px !important; padding:8px 12px !important; 
-      font-size:15px !important; font-weight:800 !important; color:#fff !important; 
-      border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; 
-      pointer-events: none !important; 
-    }
-    
-    g.markmap-node { cursor: pointer; pointer-events: all; }
-    g.markmap-node[data-depth="0"] .markmap-foreign, 
-    g.markmap-node[data-depth="1"] .markmap-foreign, 
-    g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
-    g.markmap-node[data-depth="3"] .markmap-foreign, 
-    g.markmap-node[data-depth="4"] .markmap-foreign, 
-    g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
 
-    .mm-row{ display:flex; align-items:center; gap:8px; }
-    .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; }
+  <style>
+    :root{
+      --bg:#323437;
+      --nodeGrey:#3f4956;
+      --nodeGreen:#1f4a35;
+      --link:rgba(140,155,170,.35);
+      --text:#ffffff;
+    }
+
+    html,body{
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      overflow:hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:var(--text);
+    }
+
+    #svg{
+      width:100vw;
+      height:100vh;
+      display:block;
+      background:var(--bg);
+    }
+
+    /* Header + toolbar are INSIDE the viewer iframe only */
+    #header{
+      position:fixed;
+      top:18px;
+      left:18px;
+      z-index:50;
+      pointer-events:none;
+    }
+    #title{
+      font-size:34px;
+      font-weight:900;
+      margin:0;
+      letter-spacing:.2px;
+    }
+    #subtitle{
+      margin-top:6px;
+      font-size:14px;
+      opacity:.8;
+      font-weight:600;
+    }
+
+    #toolbar{
+      position:fixed;
+      top:18px;
+      right:18px;
+      z-index:100;
+      display:flex;
+      gap:10px;
+      pointer-events:auto;
+    }
+    .tb-btn{
+      background:rgba(0,0,0,.25);
+      border:1px solid rgba(255,255,255,.25);
+      color:#fff;
+      height:40px;
+      min-width:40px;
+      border-radius:10px;
+      font-weight:900;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:0 12px;
+      user-select:none;
+    }
+    .tb-btn:active{ transform: translateY(1px); }
+
+    /* --- Node styling: LLM-like compact rounded boxes --- */
     .markmap-node circle{ opacity:0 !important; }
-    .markmap-link{ stroke:rgba(140,155,170,.3) !important; stroke-width:2px !important; }
+    .markmap-link{ stroke:var(--link) !important; stroke-width:2px !important; }
+
+    /* Important: do NOT rewrite node HTML after layout; it causes clipping.
+       Instead, style the existing foreignObject and use CSS arrows via attributes. */
+    .markmap-foreign{
+      border-radius:10px !important;
+      padding:8px 12px !important;
+      font-size:14px !important;
+      font-weight:800 !important;
+      color:#fff !important;
+      border:1px solid rgba(255,255,255,.10) !important;
+      line-height:1.25 !important;
+
+      /* wrap like the LLM screenshot (prevents huge wide boxes) */
+      white-space:normal !important;
+      max-width:320px !important;
+
+      /* let clicks be handled by the node group, not the text layer */
+      pointer-events:none !important;
+
+      position:relative !important;
+    }
+    .markmap-foreign > div{ color:#fff !important; }
+
+    /* Depth colouring */
+    g.markmap-node[data-depth="0"] .markmap-foreign,
+    g.markmap-node[data-depth="1"] .markmap-foreign,
+    g.markmap-node[data-depth="2"] .markmap-foreign{
+      background:var(--nodeGrey) !important;
+    }
+    g.markmap-node[data-depth="3"] .markmap-foreign,
+    g.markmap-node[data-depth="4"] .markmap-foreign,
+    g.markmap-node[data-depth="5"] .markmap-foreign,
+    g.markmap-node[data-depth="6"] .markmap-foreign{
+      background:var(--nodeGreen) !important;
+    }
+
+    /* LLM-like chevron indicator (CSS, no DOM rewriting) */
+    g.markmap-node[data-has="1"] .markmap-foreign::after{
+      content: "›";
+      position:absolute;
+      right:10px;
+      top:50%;
+      transform:translateY(-50%);
+      font-size:14px;
+      font-weight:900;
+      opacity:.9;
+      background:rgba(255,255,255,.10);
+      width:20px;
+      height:20px;
+      border-radius:6px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    g.markmap-node[data-has="1"][data-fold="0"] .markmap-foreign::after{
+      content: "‹";
+    }
+
+    /* Click feel */
+    g.markmap-node{
+      cursor:pointer;
+      pointer-events:all;
+    }
   </style>
 </head>
+
 <body>
-  <div id="header"><div id="title">Taxonomy: Animals, Food, and Catering</div></div>
-  <div id="toolbar">
-    <button class="tb-btn" id="zin">+</button>
-    <button class="tb-btn" id="zout">−</button>
-    <button class="tb-btn" id="res">Resize</button>
-    <button class="tb-btn" id="cls">Close</button>
+  <div id="header">
+    <div id="title">Taxonomy: Animals, Food, and Catering</div>
+    <div id="subtitle" id="status">Waiting for data…</div>
   </div>
+
+  <div id="toolbar">
+    <button class="tb-btn" id="zin" type="button">+</button>
+    <button class="tb-btn" id="zout" type="button">−</button>
+    <button class="tb-btn" id="res" type="button">Resize</button>
+    <button class="tb-btn" id="cls" type="button">Close</button>
+  </div>
+
   <svg id="svg" class="markmap"></svg>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -53,51 +169,76 @@
     (function(){
       const { Transformer, Markmap } = window.markmap;
       const svg = document.getElementById('svg');
+      const status = document.getElementById('status');
       const transformer = new Transformer();
       let mm = null;
 
-      function decorate(){
-        mm.g.selectAll('g.markmap-node').attr('data-depth', d => d.depth);
-        mm.g.selectAll('g.markmap-node').each(function(d){
-          const div = d3.select(this).select('foreignObject > div');
-          if (div.empty() || div.select('.mm-row').size()) return;
-          const txt = d.data.content; div.html('');
-          const row = div.append('div').attr('class','mm-row');
-          row.append('span').text(txt);
-          if (d.data.children && d.data.children.length) row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
+      function safeFit(){
+        if (!mm) return;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            try { mm.fit(); } catch(e) {}
+          });
         });
       }
 
-      window.addEventListener('message', (ev) => {
-        if (ev.data.type !== 'VAT_SET') return;
-        const root = transformer.transform(ev.data.markdown).root;
-        if (mm) mm.destroy();
-        
+      function syncAttrs(){
+        if (!mm || !mm.g) return;
+
+        mm.g.selectAll('g.markmap-node')
+          .attr('data-depth', d => String(d.depth ?? 0))
+          .attr('data-has', d => (d.data?.children && d.data.children.length ? "1" : "0"))
+          .attr('data-fold', d => (d.payload && d.payload.fold ? "1" : "0"));
+      }
+
+      function setStatus(text){
+        status.textContent = text;
+      }
+
+      window.addEventListener('message', async (ev) => {
+        if (!ev.data || ev.data.type !== 'VAT_SET') return;
+
+        const md = String(ev.data.markdown || '').trim();
+        if (!md) { setStatus("No data received."); return; }
+
+        setStatus("Rendering…");
+
+        const { root } = transformer.transform(md);
+
+        if (mm) { try { mm.destroy(); } catch(e){} mm = null; }
+
         mm = Markmap.create(svg, {
           autoFit: true,
-          initialExpandLevel: 2,
-          /* FIX: Ensure enough vertical space so Level 3 nodes don't overlap */
-          spacingVertical: 100,
-          spacingHorizontal: 160,
-          duration: 0 
+          initialExpandLevel: 2,     // default view: levels 1–2
+          spacingVertical: 24,       // compact like your LLM screenshot
+          spacingHorizontal: 120,    // tighter horizontally
+          duration: 0
         }, root);
-        
-        decorate();
-        
+
+        // attach click to toggle fold/unfold
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
+          e.preventDefault();
           e.stopPropagation();
-          if (d.data.children) {
-            await mm.toggleNode(d);
-            decorate();
-          }
+          if (!d?.data?.children || !d.data.children.length) return;
+          await mm.toggleNode(d);
+          syncAttrs();
+          safeFit();
+          setStatus(`Expand level: ${Math.max(1, (d.depth ?? 0)+1)} (click nodes to drill down)`);
         });
+
+        syncAttrs();
+        safeFit();
+        setStatus("Expand level: 2 (click nodes to drill down)");
       });
 
-      document.getElementById('zin').onclick = () => mm.rescale(1.2);
-      document.getElementById('zout').onclick = () => mm.rescale(0.8);
-      document.getElementById('res').onclick = () => mm.fit();
-      document.getElementById('cls').onclick = () => window.parent.postMessage({type:'VAT_CLOSE'}, '*');
-      window.parent.postMessage({type:'VAT_READY'}, '*');
+      // toolbar
+      document.getElementById('zin').addEventListener('click', (e) => { e.stopPropagation(); if (mm) mm.rescale(1.2); });
+      document.getElementById('zout').addEventListener('click', (e) => { e.stopPropagation(); if (mm) mm.rescale(0.8); });
+      document.getElementById('res').addEventListener('click', (e) => { e.stopPropagation(); safeFit(); });
+      document.getElementById('cls').addEventListener('click', (e) => { e.stopPropagation(); window.parent.postMessage({type:'VAT_CLOSE'}, '*'); });
+
+      // signal ready to parent
+      window.parent.postMessage({ type:'VAT_READY' }, '*');
     })();
   </script>
 </body>
