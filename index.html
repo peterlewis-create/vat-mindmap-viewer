@@ -10,11 +10,16 @@
     #svg{ width:100vw; height:100vh; display:block; }
     #header{ position:fixed; top:18px; left:18px; z-index:50; pointer-events:none; }
     #title{ font-size:34px; font-weight:900; margin:0; }
-    #toolbar{ position:fixed; top:18px; right:18px; z-index:60; display:flex; gap:10px; }
+    #toolbar{ position:fixed; top:18px; right:18px; z-index:100; display:flex; gap:10px; }
     .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
-    .markmap-foreign{ border-radius:8px !important; padding:8px 12px !important; font-size:15px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; }
+    
+    /* SURGICAL FIX: Ensures clicking the text actually triggers the expansion logic */
+    .markmap-foreign{ border-radius:8px !important; padding:8px 12px !important; font-size:15px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; pointer-events: none !important; }
+    
+    g.markmap-node { cursor: pointer; pointer-events: all; }
     g.markmap-node[data-depth="0"] .markmap-foreign, g.markmap-node[data-depth="1"] .markmap-foreign, g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
     g.markmap-node[data-depth="3"] .markmap-foreign, g.markmap-node[data-depth="4"] .markmap-foreign, g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
+
     .mm-row{ display:flex; align-items:center; gap:8px; }
     .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; }
     .markmap-node circle{ opacity:0 !important; }
@@ -49,7 +54,13 @@
         if (ev.data.type !== 'VAT_SET') return;
         const root = transformer.transform(ev.data.markdown).root;
         if (mm) mm.destroy();
-        mm = Markmap.create(svg, { autoFit: true, initialExpandLevel: 2, spacingVertical: 90, spacingHorizontal: 160, duration: 0 }, root);
+        mm = Markmap.create(svg, { 
+          autoFit: true, 
+          initialExpandLevel: 2, 
+          spacingVertical: 100, // Surgical Fix: Added spacing to prevent overlap
+          spacingHorizontal: 160, 
+          duration: 0 
+        }, root);
         decorate();
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.stopPropagation();
