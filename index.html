@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
+
   <style>
     :root{
       --bg:#323437;        /* LLM-like charcoal */
@@ -52,6 +53,7 @@
     g.markmap-node[data-depth="4"] .markmap-foreign { background:var(--nodeGreen) !important; }
 
     .mm-row{ display:flex; align-items:center; gap:10px; }
+    .mm-text{ display:inline-block; }
     .mm-chev{
       display:inline-flex; align-items:center; justify-content:center;
       width:18px; height:18px; border-radius:6px; background:rgba(255,255,255,.10);
@@ -65,14 +67,14 @@
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">Click nodes to expand or magnify</div>
+    <div id="subtitle">Click nodes to toggle expansion or magnify</div>
   </div>
 
   <div id="toolbar">
     <button class="tb-btn" id="plus" title="Zoom In">+</button>
     <button class="tb-btn" id="minus" title="Zoom Out">−</button>
     <button class="tb-btn text" id="resize" title="Back to original view">Resize</button>
-    <button class="tb-btn text" id="close">Close</button>
+    <button class="tb-btn text" id="close" title="Close">Close</button>
   </div>
 
   <svg id="svg" class="markmap"></svg>
@@ -94,17 +96,38 @@
         mm.g.selectAll('g.markmap-node').each(function(d){
           const g = d3.select(this);
           const div = g.select('foreignObject > div');
-          if (div.empty() || div.select('.mm-row').size()) return;
-          const text = div.text();
-          div.html('');
-          const row = div.append('div').attr('class','mm-row');
-          row.append('span').attr('class','mm-text').text(text);
-          if (d.children && d.children.length) row.append('span').attr('class','mm-chev').text('>');
+          if (div.empty()) return;
+          
+          // Always ensure the row exists to host text and chevron
+          if (div.select('.mm-row').empty()) {
+            const text = div.text();
+            div.html('');
+            const row = div.append('div').attr('class','mm-row');
+            row.append('span').attr('class','mm-text').text(text);
+          }
+          
+          const row = div.select('.mm-row');
+          row.select('.mm-chev').remove(); // Clear old chevron
+
+          // Toggle chevron based on expansion state
+          if (d.children && d.children.length) {
+             const isFolded = d.payload && d.payload.fold;
+             row.append('span')
+                .attr('class','mm-chev')
+                .text(isFolded ? '>' : '<'); // Show '<' when expanded, '>' when collapsed
+          }
         });
 
         mm.g.selectAll('g.markmap-node').on('click.vat', async (event, d) => {
           event.preventDefault(); event.stopPropagation();
-          if (d && d.children && d.children.length) await mm.toggleNode(d);
+          
+          // Toggle logic: Expand if collapsed, collapse if showing
+          if (d && d.children && d.children.length) {
+            await mm.toggleNode(d);
+            decorateNodes(); // Re-render chevrons to show toggle state
+          }
+          
+          // Smoothly re-center the view after toggling
           mm.fit();
           await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
         });
@@ -117,8 +140,7 @@
           mm = Markmap.create(svg, {
             autoFit: true,
             initialExpandLevel: 2,
-            /* Tighter geometry for "Neatly Packaged" look */
-            spacingVertical: 45,
+            spacingVertical: 45,   /* Neatly packaged spacing */
             spacingHorizontal: 110,
             paddingX: 16
           }, out.root);
@@ -128,7 +150,6 @@
         decorateNodes();
       });
 
-      /* FIXED ZOOM LOGIC: Now zooms instead of re-rendering levels */
       document.getElementById('plus').onclick = (e) => { e.stopPropagation(); mm.rescale(1.2); };
       document.getElementById('minus').onclick = (e) => { e.stopPropagation(); mm.rescale(0.8); };
       document.getElementById('resize').onclick = (e) => { e.stopPropagation(); mm.fit(); };
