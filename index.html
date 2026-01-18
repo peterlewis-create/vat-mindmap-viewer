@@ -41,7 +41,7 @@
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">Click any node to expand. Independent toggles active.</div>
+    <div id="subtitle">All nodes are independent. Click any node to toggle expansion.</div>
   </div>
   <div id="toolbar">
     <button class="tb-btn" id="plus">+</button>
@@ -81,12 +81,14 @@
           }
         });
 
+        // REWRITTEN CLICK HANDLER: No dependencies, just direct toggle
         mm.g.selectAll('g.markmap-node').on('click.vat', async (event, d) => {
           event.preventDefault(); event.stopPropagation();
           if (d && d.children && d.children.length) {
+            // Force toggle regardless of any other node state
             await mm.toggleNode(d);
             decorateNodes();
-            // Centers camera on node being expanded
+            // Surgical focus on the specific branch
             await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
           }
         });
@@ -96,17 +98,17 @@
         if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
         const out = transformer.transform(String(ev.data.markdown || ''));
         baseRoot = out.root;
-        if (!mm) {
-          mm = Markmap.create(svg, { 
-            autoFit: true, 
-            initialExpandLevel: 2, 
-            spacingVertical: 45, 
-            spacingHorizontal: 110, 
-            paddingX: 16 
-          }, baseRoot);
-        } else {
-          mm.setData(baseRoot);
+        if (mm) {
+           mm.destroy(); // Completely clear old map state to prevent logic ghosting
+           while(svg.firstChild) svg.removeChild(svg.firstChild);
         }
+        mm = Markmap.create(svg, { 
+           autoFit: true, 
+           initialExpandLevel: 2, 
+           spacingVertical: 45, 
+           spacingHorizontal: 110, 
+           paddingX: 16 
+        }, baseRoot);
         decorateNodes();
       });
 
