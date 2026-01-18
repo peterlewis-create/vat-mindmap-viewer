@@ -21,8 +21,8 @@
     #title{ font-size:34px; font-weight:900; margin:0; line-height:1.05; }
     #subtitle{ margin-top:6px; font-size:13px; color:var(--muted); font-weight:700; }
     #toolbar{ position:fixed; top:18px; right:18px; z-index:60; display:flex; gap:10px; }
-    .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
-    .tb-btn.text{ min-width:auto; font-size:13px; }
+    .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:100px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
+    .tb-btn.text{ min-width:auto; font-size:13px; padding:0 15px;}
     .markmap-link{ stroke:var(--link) !important; stroke-width:2.2px !important; }
     .markmap-foreign{ border-radius:8px !important; padding:7px 10px !important; font-size:14px !important; font-weight:800 !important; color:#fff !important; border:1px solid var(--nodeBorder) !important; white-space:nowrap !important; max-width:420px !important; overflow:visible !important; }
     
@@ -41,7 +41,7 @@
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">Click any node to toggle. Reset only on Resize.</div>
+    <div id="subtitle">Each branch works independently. No auto-resetting.</div>
   </div>
   <div id="toolbar">
     <button class="tb-btn" id="plus">+</button>
@@ -59,7 +59,6 @@
       const svg = document.getElementById('svg');
       const transformer = new Transformer();
       let mm = null;
-      let baseRoot = null;
 
       function decorateNodes(){
         if (!mm || !mm.g) return;
@@ -81,14 +80,16 @@
           }
         });
 
-        /* SURGICAL TOGGLE: Prevents Level 2 resets */
+        /* THE INDEPENDENT CLICK FIX: No global fits */
         mm.g.selectAll('g.markmap-node').on('click.vat', async (event, d) => {
-          event.preventDefault(); event.stopPropagation();
+          event.preventDefault(); 
+          event.stopPropagation();
           if (d && d.children && d.children.length) {
-            // Only toggle the specific node clicked
+            // Step 1: Toggle the specific node
             await mm.toggleNode(d);
+            // Step 2: Redraw chevrons
             decorateNodes();
-            // Lock camera on the branch without global refitting
+            // Step 3: Move ONLY to that node, do not zoom out or fit all
             await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
           }
         });
@@ -97,27 +98,27 @@
       window.addEventListener('message', (ev)=>{
         if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
         const out = transformer.transform(String(ev.data.markdown || ''));
-        baseRoot = out.root;
         if (mm) { mm.destroy(); while(svg.firstChild) svg.removeChild(svg.firstChild); }
         mm = Markmap.create(svg, { 
           autoFit: true, 
           initialExpandLevel: 2, 
           spacingVertical: 45, 
           spacingHorizontal: 110, 
-          paddingX: 16 
-        }, baseRoot);
+          paddingX: 16,
+          // Disable auto-fit on data changes
+          autoFit: false
+        }, out.root);
         decorateNodes();
+        mm.fit(); // Only fit once on initial load
       });
 
-      document.getElementById('plus').onclick = (e) => { e.stopPropagation(); mm.rescale(1.2); };
+      document.getElementById('plus').onclick = (e) => { e.stopPropagation(); mm.rescale(1.25); };
       document.getElementById('minus').onclick = (e) => { e.stopPropagation(); mm.rescale(0.8); };
-      document.getElementById('resize').onclick = (e) => { 
-        e.stopPropagation(); 
-        // Manual reset only when user clicks "Resize"
-        mm.setData(baseRoot); 
-        mm.fit(); 
+      document.getElementById('resize').onclick = (e) => { e.stopPropagation(); mm.fit(); };
+      document.getElementById('close').onclick = (e) => { 
+        window.parent.postMessage({ type:'VAT_CLOSE' }, '*'); 
       };
-      document.getElementById('close').onclick = (e) => { window.parent.postMessage({ type:'VAT_CLOSE' }, '*'); };
+
       window.parent.postMessage({ type:'VAT_READY' }, '*');
     })();
   </script>
