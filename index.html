@@ -9,11 +9,11 @@
     html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
     #svg{ width:100vw; height:100vh; display:block; }
     
-    /* These buttons are now part of the GitHub engine for 100% reliability */
+    /* Autonomous Toolbar - Controlled by GitHub for 100% reliability */
     #toolbar{ position:fixed; top:20px; right:20px; z-index:1000; display:flex; gap:10px; }
-    .tb-btn{ background:rgba(60,60,60,0.9); border:1px solid rgba(255,255,255,0.3); color:#fff; height:42px; border-radius:8px; font-weight:900; cursor:pointer; padding:0 15px; display:flex; align-items:center; }
+    .tb-btn{ background:rgba(60,60,60,0.9); border:1px solid rgba(255,255,255,0.3); color:#fff; height:42px; border-radius:8px; font-weight:900; cursor:pointer; padding:0 15px; display:flex; align-items:center; font-size: 14px; }
 
-    /* Mindmap Toggles and Node Logic */
+    /* Mindmap Toggles and Expansion Logic */
     .markmap-foreign{ border-radius:8px !important; padding:10px 15px !important; font-size:16px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; pointer-events: none !important; }
     g.markmap-node { cursor: pointer; pointer-events: all; }
     g.markmap-node[data-depth="0"] .markmap-foreign, g.markmap-node[data-depth="1"] .markmap-foreign, g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
@@ -27,10 +27,10 @@
 </head>
 <body>
   <div id="toolbar">
-    <button class="tb-btn" id="zin">+</button>
-    <button class="tb-btn" id="zout">−</button>
+    <button class="tb-btn" id="zin">Zoom +</button>
+    <button class="tb-btn" id="zout">Zoom −</button>
     <button class="tb-btn" id="res">Fit Screen</button>
-    <button class="tb-btn" id="cls">Close</button>
+    <button class="tb-btn" id="cls">Close Map</button>
   </div>
   <svg id="svg" class="markmap"></svg>
 
@@ -45,7 +45,6 @@
       const transformer = new Transformer();
       let mm = null;
 
-      // DATA HOSTED DIRECTLY ON GITHUB FOR STABILITY
       const MD = `# VAT on Animals, Food, and Catering (UK)
 ## Food & Drink Section
 ### Live Animals (Human Species)
@@ -74,12 +73,12 @@
 ##### Soft drinks and mineral water
 ##### Savoury snacks (potato crisps, salted nuts)
 ##### Sports nutrition drinks (Item 4A)
-#### Specialised VAT Logic
+#### Specialised VAT Treatment
 ##### Dietary supplements (Standard-rated)
 ##### Medicines (Standard-rated)
 ##### Enteral/Parenteral nutrition (Zero-rated)
 ##### Diabetic/Hypoallergenic foods (Zero-rated)
-### Catering & Takeaway Logic
+### Catering & Hot Food Sector
 #### Catering per se (Standard-Rated)
 ##### On-premises consumption
 ##### Restaurants, cafes, and canteens
@@ -92,7 +91,7 @@
 ##### Test 3: Kept hot after heating
 ##### Test 4: Heat retentive packaging
 ##### Test 5: Marketed as hot
-## Animal Feed Section
+## Animal Feed & Plants Sector
 ### Animal Feed & Feedstuffs logic
 #### General Feed (Zero-Rated)
 ##### Straights, compounds, concentrates
@@ -114,7 +113,7 @@
 ##### Industrial crops (e.g. evening primrose)
 ##### Plant growing kits
 ##### Turf
-### Services and Processes scope
+### Services and Processes logic
 #### New zero-rated goods production (Zero-rated)
 #### Abattoir slaughtering only (Standard-rated)
 #### Dressing carcasses (Zero-rated)
@@ -134,19 +133,19 @@
         });
       }
 
-      function render(){
+      function init(){
         const { root } = transformer.transform(MD);
         if (mm) mm.destroy();
         mm = Markmap.create(svg, { autoFit: true, initialExpandLevel: 1, spacingVertical: 100, spacingHorizontal: 150 }, root);
         decorate();
-        // FORCE TOGGLE LOGIC: Ensures 2nd, 3rd, and 4th levels open instantly
+        // SYSTEM LEVEL FIX: Direct binding ensures clicks reach expansion logic every time
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.stopPropagation();
           if (d.data.children) { await mm.toggleNode(d); decorate(); }
         });
       }
 
-      render();
+      init();
       document.getElementById('zin').onclick = () => mm.rescale(1.2);
       document.getElementById('zout').onclick = () => mm.rescale(0.8);
       document.getElementById('res').onclick = () => mm.fit();
