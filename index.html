@@ -4,177 +4,77 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VAT Mindmap Viewer</title>
-
   <style>
     :root{
       --bg:#323437;        /* LLM-like charcoal */
       --text:#ffffff;
       --muted:rgba(255,255,255,.75);
-
       --nodeGrey:#3f4956;  /* level 0–2 */
       --nodeGreen:#1f4a35; /* deeper levels */
       --nodeBorder:rgba(255,255,255,.10);
-
       --link:rgba(140,155,170,.35);
       --accent:#79a8ff;
     }
 
     html,body{
-      height:100%;
-      margin:0;
-      background:var(--bg);
-      overflow:hidden;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      color:var(--text);
+      height:100%; margin:0; background:var(--bg); overflow:hidden;
+      font-family:system-ui,-apple-system,sans-serif; color:var(--text);
     }
 
-    #svg{
-      width:100vw;
-      height:100vh;
-      display:block;
-      background:var(--bg);
-    }
+    #svg{ width:100vw; height:100vh; display:block; background:var(--bg); }
 
-    /* Header */
-    #header{
-      position:fixed;
-      top:18px;
-      left:18px;
-      z-index:50;
-      pointer-events:none;
-    }
-    #title{
-      font-size:34px;
-      font-weight:900;
-      margin:0;
-      line-height:1.05;
-    }
-    #subtitle{
-      margin-top:6px;
-      font-size:13px;
-      color:var(--muted);
-      font-weight:700;
-    }
+    #header{ position:fixed; top:18px; left:18px; z-index:50; pointer-events:none; }
+    #title{ font-size:34px; font-weight:900; margin:0; line-height:1.05; }
+    #subtitle{ margin-top:6px; font-size:13px; color:var(--muted); font-weight:700; }
 
-    /* Toolbar */
-    #toolbar{
-      position:fixed;
-      top:18px;
-      right:18px;
-      z-index:60;
-      display:flex;
-      gap:10px;
-      pointer-events:auto;
-    }
+    #toolbar{ position:fixed; top:18px; right:18px; z-index:60; display:flex; gap:10px; }
     .tb-btn{
-      background:rgba(0,0,0,.25);
-      border:1px solid rgba(255,255,255,.25);
-      color:#fff;
-      height:40px;
-      min-width:40px;
-      border-radius:10px;
-      font-weight:900;
-      cursor:pointer;
-      user-select:none;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:0 10px;
+      background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff;
+      height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; padding:0 10px;
     }
     .tb-btn.text{ min-width:auto; font-size:13px; }
     .tb-btn:hover{ border-color:rgba(255,255,255,.55); }
 
-    /* Markmap styling – compact, readable, LLM-like */
-    .markmap-link{
-      stroke:var(--link) !important;
-      stroke-width:2.2px !important;
-    }
+    .markmap-link{ stroke:var(--link) !important; stroke-width:2.2px !important; }
 
-    /* The HTML label container created by markmap */
     .markmap-foreign{
-      border-radius:8px !important;
-      padding:7px 10px !important;      /* compact */
-      font-size:14px !important;         /* readable */
-      font-weight:800 !important;
-      line-height:1.25 !important;
-      color:#fff !important;
-      border:1px solid var(--nodeBorder) !important;
-      box-shadow:none !important;
-
-      /* IMPORTANT: prevent clipping bugs */
-      white-space:nowrap !important;
-      max-width:420px !important;
-      overflow:visible !important;
+      border-radius:8px !important; padding:7px 10px !important; font-size:14px !important;
+      font-weight:800 !important; line-height:1.25 !important; color:#fff !important;
+      border:1px solid var(--nodeBorder) !important; white-space:nowrap !important;
+      max-width:420px !important; overflow:visible !important;
     }
 
-    /* Depth-based background (match LLM feel) */
     g.markmap-node[data-depth="0"] .markmap-foreign,
     g.markmap-node[data-depth="1"] .markmap-foreign,
-    g.markmap-node[data-depth="2"] .markmap-foreign{
-      background:var(--nodeGrey) !important;
-    }
+    g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
     g.markmap-node[data-depth="3"] .markmap-foreign,
-    g.markmap-node[data-depth="4"] .markmap-foreign,
-    g.markmap-node[data-depth="5"] .markmap-foreign,
-    g.markmap-node[data-depth="6"] .markmap-foreign,
-    g.markmap-node[data-depth="7"] .markmap-foreign,
-    g.markmap-node[data-depth="8"] .markmap-foreign{
-      background:var(--nodeGreen) !important;
-    }
+    g.markmap-node[data-depth="4"] .markmap-foreign { background:var(--nodeGreen) !important; }
 
-    /* Little chevron like the LLM nodes */
     .mm-row{ display:flex; align-items:center; gap:10px; }
-    .mm-text{ display:inline-block; }
     .mm-chev{
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      width:18px;
-      height:18px;
-      border-radius:6px;
-      background:rgba(255,255,255,.10);
-      color:rgba(255,255,255,.80);
-      font-size:13px;
-      font-weight:900;
-      margin-left:2px;
+      display:inline-flex; align-items:center; justify-content:center;
+      width:18px; height:18px; border-radius:6px; background:rgba(255,255,255,.10);
+      color:rgba(255,255,255,.80); font-size:13px; font-weight:900; margin-left:2px;
     }
 
-    /* Hide the coloured node dots (LLM look has no dots) */
     .markmap-node circle{ opacity:0.0 !important; }
-
-    /* Status */
-    #status{
-      position:fixed;
-      left:18px;
-      bottom:18px;
-      z-index:70;
-      background:rgba(0,0,0,.25);
-      border:1px solid rgba(255,255,255,.18);
-      padding:7px 10px;
-      border-radius:10px;
-      font-size:12px;
-      font-weight:700;
-      color:rgba(255,255,255,.85);
-      pointer-events:none;
-      max-width:60vw;
-    }
   </style>
 </head>
 
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">Expand level: <span id="lvl">2</span> (click a node to magnify)</div>
+    <div id="subtitle">Click nodes to expand or magnify</div>
   </div>
 
   <div id="toolbar">
-    <button class="tb-btn" id="plus" title="Show one more level">+</button>
-    <button class="tb-btn" id="minus" title="Show one fewer level">−</button>
-    <button class="tb-btn text" id="resize" title="Back to level 2">Resize</button>
-    <button class="tb-btn text" id="close" title="Close">Close</button>
+    <button class="tb-btn" id="plus" title="Zoom In">+</button>
+    <button class="tb-btn" id="minus" title="Zoom Out">−</button>
+    <button class="tb-btn text" id="resize" title="Back to original view">Resize</button>
+    <button class="tb-btn text" id="close">Close</button>
   </div>
 
-  <div id="status">Waiting for mindmap data…</div>
   <svg id="svg" class="markmap"></svg>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -185,153 +85,58 @@
     (function(){
       const { Transformer, Markmap } = window.markmap;
       const svg = document.getElementById('svg');
-      const lvlEl = document.getElementById('lvl');
-      const statusEl = document.getElementById('status');
-
       const transformer = new Transformer();
-      let baseRoot = null;
-      let expandLevel = 2;
       let mm = null;
-
-      function setStatus(s){ statusEl.textContent = s; }
-      function setLvl(){ lvlEl.textContent = String(expandLevel); }
-
-      function clearSvg(){
-        while(svg.firstChild) svg.removeChild(svg.firstChild);
-      }
 
       function decorateNodes(){
         if (!mm || !mm.g) return;
-
-        mm.g.selectAll('g.markmap-node')
-          .attr('data-depth', d => d.depth);
-
-        // Add chevrons to nodes that have children
+        mm.g.selectAll('g.markmap-node').attr('data-depth', d => d.depth);
         mm.g.selectAll('g.markmap-node').each(function(d){
           const g = d3.select(this);
           const div = g.select('foreignObject > div');
-          if (div.empty()) return;
-
-          // Only wrap once
-          if (div.select('.mm-row').size()) return;
-
+          if (div.empty() || div.select('.mm-row').size()) return;
           const text = div.text();
           div.html('');
           const row = div.append('div').attr('class','mm-row');
           row.append('span').attr('class','mm-text').text(text);
-
-          if (d.children && d.children.length){
-            row.append('span').attr('class','mm-chev').text('>');
-          }
+          if (d.children && d.children.length) row.append('span').attr('class','mm-chev').text('>');
         });
 
-        // Click-to-magnify behaviour (LLM feel: focus on branch)
-        mm.g.selectAll('g.markmap-node')
-          .on('click.vat', async (event, d) => {
-            try{
-              event.preventDefault();
-              event.stopPropagation();
-
-              // Expand/collapse the clicked node (if it has children)
-              if (d && d.children && d.children.length){
-                await mm.toggleNode(d);
-              }
-
-              // Focus (move rest off screen)
-              mm.fit();
-              await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
-
-              // Mild zoom (NOT massive)
-              await mm.rescale(1.25);
-
-              setStatus('Magnified selected branch. Use Resize to return to the full level-2 view.');
-            } catch(e){
-              setStatus('Viewer error: ' + (e && e.message ? e.message : String(e)));
-            }
-          });
+        mm.g.selectAll('g.markmap-node').on('click.vat', async (event, d) => {
+          event.preventDefault(); event.stopPropagation();
+          if (d && d.children && d.children.length) await mm.toggleNode(d);
+          mm.fit();
+          await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
+        });
       }
 
-      // IMPORTANT: recreate the map whenever expand level changes
-      // (this is why your current build can’t reach level 3 reliably)
-      function render(){
-        if (!baseRoot) return;
-
-        clearSvg();
-        mm = null;
-
-        const options = {
-          autoFit: true,
-          initialExpandLevel: expandLevel,
-
-          // LLM-like geometry: steeper vertical, tighter horizontal
-          spacingVertical: 95,
-          spacingHorizontal: 115,
-
-          paddingX: 16
-        };
-
-        mm = Markmap.create(svg, options, JSON.parse(JSON.stringify(baseRoot)));
-        mm.fit();
-        decorateNodes();
-        setLvl();
-      }
-
-      function setExpand(n){
-        expandLevel = Math.max(1, Math.min(8, n));
-        render();
-        setStatus('Expand level set to ' + expandLevel + '.');
-      }
-
-      document.getElementById('plus').addEventListener('click', (e)=>{
-        e.preventDefault(); e.stopPropagation();
-        setExpand(expandLevel + 1);
-      }, true);
-
-      document.getElementById('minus').addEventListener('click', (e)=>{
-        e.preventDefault(); e.stopPropagation();
-        setExpand(expandLevel - 1);
-      }, true);
-
-      document.getElementById('resize').addEventListener('click', (e)=>{
-        e.preventDefault(); e.stopPropagation();
-        setExpand(2);
-        if (mm) mm.fit();
-        setStatus('Reset to expand level 2.');
-      }, true);
-
-      document.getElementById('close').addEventListener('click', (e)=>{
-        e.preventDefault(); e.stopPropagation();
-        window.parent.postMessage({ type:'VAT_CLOSE' }, '*');
-      }, true);
-
-      // Receive markdown
       window.addEventListener('message', (ev)=>{
         if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
-
-        const md = String(ev.data.markdown || '').trim();
-        if (!md){
-          setStatus('No markdown received.');
-          return;
+        const out = transformer.transform(String(ev.data.markdown || ''));
+        if (!mm) {
+          mm = Markmap.create(svg, {
+            autoFit: true,
+            initialExpandLevel: 2,
+            /* Tighter geometry for "Neatly Packaged" look */
+            spacingVertical: 45,
+            spacingHorizontal: 110,
+            paddingX: 16
+          }, out.root);
+        } else {
+          mm.setData(out.root);
         }
-
-        const out = transformer.transform(md);
-        if (!out || !out.root){
-          setStatus('Could not parse markdown.');
-          return;
-        }
-
-        baseRoot = out.root;
-        setStatus('Data received. Rendering…');
-        setExpand(2);
-        setStatus('Ready. Expand level 2. Click a node to magnify. Use + to reach level 3/4.');
+        decorateNodes();
       });
 
-      // Ready handshake
-      window.parent.postMessage({ type:'VAT_READY' }, '*');
+      /* FIXED ZOOM LOGIC: Now zooms instead of re-rendering levels */
+      document.getElementById('plus').onclick = (e) => { e.stopPropagation(); mm.rescale(1.2); };
+      document.getElementById('minus').onclick = (e) => { e.stopPropagation(); mm.rescale(0.8); };
+      document.getElementById('resize').onclick = (e) => { e.stopPropagation(); mm.fit(); };
+      document.getElementById('close').onclick = (e) => { 
+        window.parent.postMessage({ type:'VAT_CLOSE' }, '*'); 
+      };
 
-      setTimeout(()=>{
-        if (!baseRoot) setStatus('Waiting for data from the parent page…');
-      }, 600);
+      window.parent.postMessage({ type:'VAT_READY' }, '*');
     })();
   </script>
 </body>
