@@ -7,25 +7,20 @@
   <style>
     :root{
       --bg:#323437;
-      --text:#ffffff;
-      --muted:rgba(255,255,255,.75);
       --nodeGrey:#3f4956;
       --nodeGreen:#1f4a35;
-      --nodeBorder:rgba(255,255,255,.10);
-      --link:rgba(140,155,170,.35);
       --accent:#79a8ff;
     }
-    html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:system-ui,-apple-system,sans-serif; color:var(--text); }
-    #svg{ width:100vw; height:100vh; display:block; background:var(--bg); }
+    html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
+    #svg{ width:100vw; height:100vh; display:block; }
     #header{ position:fixed; top:18px; left:18px; z-index:50; pointer-events:none; }
-    #title{ font-size:34px; font-weight:900; margin:0; line-height:1.05; }
-    #subtitle{ margin-top:6px; font-size:13px; color:var(--muted); font-weight:700; }
+    #title{ font-size:34px; font-weight:900; margin:0; }
     #toolbar{ position:fixed; top:18px; right:18px; z-index:60; display:flex; gap:10px; }
-    .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:100px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
-    .tb-btn.text{ min-width:auto; font-size:13px; padding:0 15px;}
-    .markmap-link{ stroke:var(--link) !important; stroke-width:2.2px !important; }
-    .markmap-foreign{ border-radius:8px !important; padding:7px 10px !important; font-size:14px !important; font-weight:800 !important; color:#fff !important; border:1px solid var(--nodeBorder) !important; white-space:nowrap !important; max-width:420px !important; overflow:visible !important; }
+    .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
     
+    .markmap-foreign{ border-radius:8px !important; padding:8px 12px !important; font-size:15px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; }
+    
+    /* Vertical Depth Colors */
     g.markmap-node[data-depth="0"] .markmap-foreign,
     g.markmap-node[data-depth="1"] .markmap-foreign,
     g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
@@ -33,21 +28,19 @@
     g.markmap-node[data-depth="4"] .markmap-foreign,
     g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
 
-    .mm-row{ display:flex; align-items:center; gap:10px; }
-    .mm-chev{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:6px; background:rgba(255,255,255,.10); color:rgba(255,255,255,.80); font-size:13px; font-weight:900; }
-    .markmap-node circle{ opacity:0.0 !important; }
+    .mm-row{ display:flex; align-items:center; gap:8px; }
+    .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; }
+    .markmap-node circle{ opacity:0 !important; }
+    .markmap-link{ stroke:rgba(140,155,170,.3) !important; stroke-width:2px !important; }
   </style>
 </head>
 <body>
-  <div id="header">
-    <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">Manual branch control active. Nodes will not auto-collapse.</div>
-  </div>
+  <div id="header"><div id="title">Taxonomy: Animals, Food, and Catering</div></div>
   <div id="toolbar">
-    <button class="tb-btn" id="plus">+</button>
-    <button class="tb-btn" id="minus">−</button>
-    <button class="tb-btn text" id="resize">Resize</button>
-    <button class="tb-btn text" id="close">Close</button>
+    <button class="tb-btn" id="zin">+</button>
+    <button class="tb-btn" id="zout">−</button>
+    <button class="tb-btn" id="res">Resize</button>
+    <button class="tb-btn" id="cls">Close</button>
   </div>
   <svg id="svg" class="markmap"></svg>
 
@@ -63,92 +56,50 @@
       let mm = null;
       let baseRoot = null;
 
-      // Track open/closed state of every node by its content string
-      const nodeStates = new Map();
-
-      function updateFoldState(node) {
-        if (node.children && node.children.length > 0) {
-          // If we haven't tracked this node yet, default it to folded (except top levels)
-          if (!nodeStates.has(node.content)) {
-            nodeStates.set(node.content, node.depth > 1);
-          }
-          node.payload = node.payload || {};
-          node.payload.fold = nodeStates.get(node.content);
-          node.children.forEach(updateFoldState);
-        }
-      }
-
-      function decorateNodes(){
-        if (!mm || !mm.g) return;
+      function decorate(){
         mm.g.selectAll('g.markmap-node').attr('data-depth', d => d.depth);
         mm.g.selectAll('g.markmap-node').each(function(d){
-          const g = d3.select(this);
-          const div = g.select('foreignObject > div');
-          if (div.empty()) return;
-          if (div.select('.mm-row').empty()) {
-            const text = div.text(); div.html('');
-            const row = div.append('div').attr('class','mm-row');
-            row.append('span').attr('class','mm-text').text(text);
-          }
-          const row = div.select('.mm-row');
-          row.select('.mm-chev').remove();
-          if (d.children && d.children.length) {
-             const isFolded = nodeStates.get(d.content);
-             row.append('span').attr('class','mm-chev').text(isFolded ? '>' : '<');
-          }
-        });
-
-        // CUSTOM CLICK HANDLER: Manually toggle our state map and re-render
-        mm.g.selectAll('g.markmap-node').on('click.vat', (event, d) => {
-          event.preventDefault(); event.stopPropagation();
-          if (d.children && d.children.length > 0) {
-            const currentState = nodeStates.get(d.content);
-            nodeStates.set(d.content, !currentState);
-            renderMap(); // Force re-render with the new manual state
-          }
+          const div = d3.select(this).select('foreignObject > div');
+          if (div.empty() || div.select('.mm-row').size()) return;
+          const txt = div.text(); div.html('');
+          const row = div.append('div').attr('class','mm-row');
+          row.append('span').text(txt);
+          if (d.children && d.children.length) row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
         });
       }
 
-      function renderMap() {
-        if (!baseRoot) return;
-        const rootCopy = JSON.parse(JSON.stringify(baseRoot));
-        updateFoldState(rootCopy);
+      window.addEventListener('message', (ev) => {
+        if (ev.data.type !== 'VAT_SET') return;
+        baseRoot = transformer.transform(ev.data.markdown).root;
+        if (mm) mm.destroy();
         
-        if (mm) {
-          mm.setData(rootCopy);
-        } else {
-          mm = Markmap.create(svg, {
-            autoFit: false,
-            spacingVertical: 45,
-            spacingHorizontal: 110,
-            paddingX: 16
-          }, rootCopy);
-          mm.fit();
-        }
-        decorateNodes();
-      }
-
-      window.addEventListener('message', (ev)=>{
-        if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
-        const out = transformer.transform(String(ev.data.markdown || ''));
-        baseRoot = out.root;
-        nodeStates.clear(); // Reset states for new data
-        renderMap();
+        mm = Markmap.create(svg, {
+          autoFit: true,
+          initialExpandLevel: 2,
+          /* THE FIX: Massive vertical spacing to allow room for all levels */
+          spacingVertical: 80,
+          spacingHorizontal: 150,
+          duration: 0 /* Instant toggle to prevent engine collisions */
+        }, baseRoot);
+        
+        decorate();
+        
+        mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
+          e.stopPropagation();
+          if (d.children) {
+            await mm.toggleNode(d);
+            decorate();
+            /* Locks camera on the branch so it cannot revert to center */
+            await mm.centerNode(d, { top: 100, bottom: 100, left: 100, right: 100 });
+          }
+        });
       });
 
-      document.getElementById('plus').onclick = (e) => { e.stopPropagation(); mm.rescale(1.25); };
-      document.getElementById('minus').onclick = (e) => { e.stopPropagation(); mm.rescale(0.8); };
-      document.getElementById('resize').onclick = (e) => { 
-        e.stopPropagation(); 
-        nodeStates.clear(); // Reset all branches to closed
-        renderMap();
-        mm.fit(); 
-      };
-      document.getElementById('close').onclick = (e) => { 
-        window.parent.postMessage({ type:'VAT_CLOSE' }, '*'); 
-      };
-
-      window.parent.postMessage({ type:'VAT_READY' }, '*');
+      document.getElementById('zin').onclick = () => mm.rescale(1.2);
+      document.getElementById('zout').onclick = () => mm.rescale(0.8);
+      document.getElementById('res').onclick = () => mm.fit();
+      document.getElementById('cls').onclick = () => window.parent.postMessage({type:'VAT_CLOSE'}, '*');
+      window.parent.postMessage({type:'VAT_READY'}, '*');
     })();
   </script>
 </body>
