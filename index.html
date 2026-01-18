@@ -50,10 +50,10 @@
     g.markmap-node[data-depth="1"] .markmap-foreign,
     g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
     g.markmap-node[data-depth="3"] .markmap-foreign,
-    g.markmap-node[data-depth="4"] .markmap-foreign { background:var(--nodeGreen) !important; }
+    g.markmap-node[data-depth="4"] .markmap-foreign,
+    g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
 
     .mm-row{ display:flex; align-items:center; gap:10px; }
-    .mm-text{ display:inline-block; }
     .mm-chev{
       display:inline-flex; align-items:center; justify-content:center;
       width:18px; height:18px; border-radius:6px; background:rgba(255,255,255,.10);
@@ -67,7 +67,7 @@
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">Click nodes to toggle expansion or magnify</div>
+    <div id="subtitle">Click nodes to toggle expansion. Use Resize to center.</div>
   </div>
 
   <div id="toolbar">
@@ -98,7 +98,6 @@
           const div = g.select('foreignObject > div');
           if (div.empty()) return;
           
-          // Always ensure the row exists to host text and chevron
           if (div.select('.mm-row').empty()) {
             const text = div.text();
             div.html('');
@@ -107,29 +106,27 @@
           }
           
           const row = div.select('.mm-row');
-          row.select('.mm-chev').remove(); // Clear old chevron
+          row.select('.mm-chev').remove();
 
-          // Toggle chevron based on expansion state
           if (d.children && d.children.length) {
              const isFolded = d.payload && d.payload.fold;
              row.append('span')
                 .attr('class','mm-chev')
-                .text(isFolded ? '>' : '<'); // Show '<' when expanded, '>' when collapsed
+                .text(isFolded ? '>' : '<');
           }
         });
 
         mm.g.selectAll('g.markmap-node').on('click.vat', async (event, d) => {
           event.preventDefault(); event.stopPropagation();
           
-          // Toggle logic: Expand if collapsed, collapse if showing
           if (d && d.children && d.children.length) {
             await mm.toggleNode(d);
-            decorateNodes(); // Re-render chevrons to show toggle state
+            decorateNodes();
+            
+            /* FIX: Removed mm.fit() which caused the level 1 revert.
+               Now we surgically center only the node you clicked. */
+            await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
           }
-          
-          // Smoothly re-center the view after toggling
-          mm.fit();
-          await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
         });
       }
 
@@ -140,7 +137,7 @@
           mm = Markmap.create(svg, {
             autoFit: true,
             initialExpandLevel: 2,
-            spacingVertical: 45,   /* Neatly packaged spacing */
+            spacingVertical: 45,
             spacingHorizontal: 110,
             paddingX: 16
           }, out.root);
@@ -152,7 +149,10 @@
 
       document.getElementById('plus').onclick = (e) => { e.stopPropagation(); mm.rescale(1.2); };
       document.getElementById('minus').onclick = (e) => { e.stopPropagation(); mm.rescale(0.8); };
+      
+      /* Resize button still performs a full center/fit for the user */
       document.getElementById('resize').onclick = (e) => { e.stopPropagation(); mm.fit(); };
+      
       document.getElementById('close').onclick = (e) => { 
         window.parent.postMessage({ type:'VAT_CLOSE' }, '*'); 
       };
