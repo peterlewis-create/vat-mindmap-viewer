@@ -11,11 +11,10 @@
     #toolbar{ position:fixed; top:18px; right:18px; z-index:100; display:flex; gap:10px; }
     .tb-btn{ background:rgba(0,0,0,.3); border:1px solid rgba(255,255,255,.3); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 15px; }
     
-    /* FIX: Ensures the click instruction passes through the text to the expansion engine */
+    /* DEVELOPER FIX: Allows clicks to pass through the text to the expansion logic */
     .markmap-foreign{ border-radius:8px !important; padding:10px 14px !important; font-size:15px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; pointer-events: none !important; }
     
     g.markmap-node { cursor: pointer !important; pointer-events: all !important; }
-
     g.markmap-node[data-depth="0"] .markmap-foreign, g.markmap-node[data-depth="1"] .markmap-foreign, g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
     g.markmap-node[data-depth="3"] .markmap-foreign, g.markmap-node[data-depth="4"] .markmap-foreign, g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
 
@@ -66,7 +65,7 @@
         
         mm = Markmap.create(svg, {
           autoFit: true,
-          initialExpandLevel: 1, // Starts with Level 2 open
+          initialExpandLevel: 1, 
           spacingVertical: 100,
           spacingHorizontal: 160,
           duration: 350 
@@ -74,7 +73,7 @@
         
         decorate();
         
-        // FORCED TOGGLE BINDING: Fixes "no 3rd level" expansion
+        // FORCED TOGGLE BINDING: This is the developer fix for the "stuck" tiers
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.stopPropagation();
           if (d.data.children) {
