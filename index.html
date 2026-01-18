@@ -9,7 +9,7 @@
     html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
     #svg{ width:100vw; height:100vh; display:block; }
     
-    /* Permanent Header Buttons - Controlled by GitHub, not Squarespace */
+    /* These buttons are now part of the GitHub engine for 100% reliability */
     #toolbar{ position:fixed; top:20px; right:20px; z-index:1000; display:flex; gap:10px; }
     .tb-btn{ background:rgba(60,60,60,0.9); border:1px solid rgba(255,255,255,0.3); color:#fff; height:42px; border-radius:8px; font-weight:900; cursor:pointer; padding:0 15px; display:flex; align-items:center; }
 
@@ -139,7 +139,7 @@
         if (mm) mm.destroy();
         mm = Markmap.create(svg, { autoFit: true, initialExpandLevel: 1, spacingVertical: 100, spacingHorizontal: 150 }, root);
         decorate();
-        // FORCE TOGGLE LOGIC: Ensures deeper levels open on click
+        // FORCE TOGGLE LOGIC: Ensures 2nd, 3rd, and 4th levels open instantly
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.stopPropagation();
           if (d.data.children) { await mm.toggleNode(d); decorate(); }
