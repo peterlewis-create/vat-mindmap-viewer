@@ -15,15 +15,19 @@
     #toolbar{ position:fixed; top:18px; right:18px; z-index:60; display:flex; gap:10px; }
     .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
     
-    /* FIX: Prevents text from blocking the click on the expansion logic */
+    /* FIX: Ensures text is visible and clickable */
     .markmap-foreign{ 
       border-radius:8px !important; padding:8px 12px !important; 
-      font-size:15px !important; font-weight:800 !important; color:#fff !important; 
-      border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important;
-      pointer-events: none !important; 
+      font-size:16px !important; font-weight:800 !important; color:#fff !important; 
+      border:1px solid rgba(255,255,255,.1) !important; 
+      background: var(--nodeGrey);
+      white-space: nowrap !important;
+      display: flex !important;
+      align-items: center !important;
     }
     
-    g.markmap-node { cursor: pointer; pointer-events: all; }
+    /* Clickable area fix */
+    g.markmap-node { cursor: pointer !important; }
 
     g.markmap-node[data-depth="0"] .markmap-foreign,
     g.markmap-node[data-depth="1"] .markmap-foreign,
@@ -32,10 +36,10 @@
     g.markmap-node[data-depth="4"] .markmap-foreign,
     g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
 
-    .mm-row{ display:flex; align-items:center; gap:8px; }
+    .mm-row{ display:flex; align-items:center; gap:10px; pointer-events: none; }
     .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; }
     .markmap-node circle{ opacity:0 !important; }
-    .markmap-link{ stroke:rgba(140,155,170,.3) !important; stroke-width:2px !important; }
+    .markmap-link{ stroke:rgba(140,155,170,.4) !important; stroke-width:3px !important; }
   </style>
 </head>
 <body>
@@ -66,7 +70,9 @@
           const txt = d.data.content; div.html('');
           const row = div.append('div').attr('class','mm-row');
           row.append('span').text(txt);
-          if (d.data.children && d.data.children.length) row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
+          if (d.data.children && d.data.children.length) {
+            row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
+          }
         });
       }
 
@@ -77,16 +83,15 @@
         
         mm = Markmap.create(svg, {
           autoFit: true,
-          initialExpandLevel: 2,
-          /* INCREASED SPACING to prevent Level 3 collisions */
+          initialExpandLevel: 1,
           spacingVertical: 100,
-          spacingHorizontal: 150,
-          duration: 300 
+          spacingHorizontal: 120,
+          duration: 400 
         }, root);
         
         decorate();
-        
-        // RE-ATTACH CLICK LOGIC
+
+        // FIX: Re-binding the click event directly to the node
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.stopPropagation();
           if (d.data.children) {
