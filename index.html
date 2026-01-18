@@ -9,7 +9,6 @@
       --bg:#323437;
       --nodeGrey:#3f4956;
       --nodeGreen:#1f4a35;
-      --accent:#79a8ff;
     }
     html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
     #svg{ width:100vw; height:100vh; display:block; }
@@ -20,7 +19,6 @@
     
     .markmap-foreign{ border-radius:8px !important; padding:8px 12px !important; font-size:15px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; }
     
-    /* Vertical Depth Colors */
     g.markmap-node[data-depth="0"] .markmap-foreign,
     g.markmap-node[data-depth="1"] .markmap-foreign,
     g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
@@ -76,10 +74,10 @@
         mm = Markmap.create(svg, {
           autoFit: true,
           initialExpandLevel: 2,
-          /* THE FIX: Massive vertical spacing to allow room for all levels */
-          spacingVertical: 80,
-          spacingHorizontal: 150,
-          duration: 0 /* Instant toggle to prevent engine collisions */
+          /* THE FIX: Provide massive vertical room so Level 3 nodes don't collide */
+          spacingVertical: 85,
+          spacingHorizontal: 160,
+          duration: 0 
         }, baseRoot);
         
         decorate();
@@ -89,7 +87,7 @@
           if (d.children) {
             await mm.toggleNode(d);
             decorate();
-            /* Locks camera on the branch so it cannot revert to center */
+            /* Force camera to stay on the clicked branch */
             await mm.centerNode(d, { top: 100, bottom: 100, left: 100, right: 100 });
           }
         });
