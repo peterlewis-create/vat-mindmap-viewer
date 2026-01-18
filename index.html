@@ -1,111 +1,162 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+vat-mindmap-viewer
+Repository navigation
+Code
+Issues
+Pull requests
+Actions
+Projects
+Wiki
+Security
+Insights
+Settings
+Commit 79ce2fe
+peterlewis-create
+peterlewis-create
+authored
+2 hours ago
+·
+·
+Verified
+Update index.html
+main
+1 parent 
+f92df53
+ commit 
+79ce2fe
+File tree
+Filter files…
+index.html
+1 file changed
++40
+-20
+lines changed
+Search within code
+ 
+‎index.html‎
++40
+-20
+Lines changed: 40 additions & 20 deletions
+Original file line number	Diff line number	Diff line change
+@@ -6,44 +6,42 @@
   <title>VAT Mindmap Viewer</title>
   <style>
     :root{
-      --bg:#0b0f14;
+      --bg:#323437;        /* LLM-style charcoal */
+      --bg:#323437;
+      --text:#ffffff;
+      --muted:rgba(255,255,255,.75);
+      --nodeGrey:#3f4956;  /* Levels 0–2 */
+      --nodeGreen:#1f4a35; /* Levels 3–5 */
       --nodeGrey:#3f4956;
       --nodeGreen:#1f4a35;
+      --nodeBorder:rgba(255,255,255,.10);
+      --link:rgba(140,155,170,.35);
+      --accent:#79a8ff;
     }
-    html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
-    #svg{ width:100vw; height:100vh; display:block; }
-    #toolbar{ position:fixed; top:18px; right:18px; z-index:100; display:flex; gap:10px; }
-    .tb-btn{ background:rgba(40,40,40,0.8); border:1px solid rgba(255,255,255,0.3); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 15px; }
+    html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:system-ui, sans-serif; color:var(--text); }
+    html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:system-ui,-apple-system,sans-serif; color:var(--text); }
+    #svg{ width:100vw; height:100vh; display:block; background:var(--bg); }
+    #header{ position:fixed; top:18px; left:18px; z-index:50; pointer-events:none; }
+    #title{ font-size:34px; font-weight:900; margin:0; line-height:1.05; }
+    #subtitle{ margin-top:6px; font-size:13px; color:var(--muted); font-weight:700; }
+    #toolbar{ position:fixed; top:18px; right:18px; z-index:60; display:flex; gap:10px; }
+    .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
+    .tb-btn.text{ min-width:auto; font-size:13px; }
+    .tb-btn:hover{ border-color:rgba(255,255,255,.55); }
+    .markmap-link{ stroke:var(--link) !important; stroke-width:2.2px !important; }
+    .markmap-foreign{ border-radius:8px !important; padding:7px 10px !important; font-size:14px !important; font-weight:800 !important; color:#fff !important; border:1px solid var(--nodeBorder) !important; white-space:nowrap !important; max-width:420px !important; overflow:visible !important; }
+    /* Depth-based colors */
     
-    /* THE FIX: Ensures text is fully visible and clickable without being cut off */
-    .markmap-foreign{ 
-      border-radius:12px !important; padding:10px 16px !important; 
-      font-size:16px !important; font-weight:800 !important; color:#fff !important; 
-      border:1px solid rgba(255,255,255,0.15) !important; 
-      background: var(--nodeGrey);
-      white-space: nowrap !important;
-      display: flex !important;
-      align-items: center !important;
-      pointer-events: none !important; /* Forces click to pass to the expansion logic */
-    }
-    
-    g.markmap-node { cursor: pointer !important; pointer-events: all; }
-
     g.markmap-node[data-depth="0"] .markmap-foreign,
     g.markmap-node[data-depth="1"] .markmap-foreign,
     g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
     g.markmap-node[data-depth="3"] .markmap-foreign,
     g.markmap-node[data-depth="4"] .markmap-foreign,
+    g.markmap-node[data-depth="5"] .markmap-foreign{ background:var(--nodeGreen) !important; }
     g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
 
-    .mm-row{ display:flex; align-items:center; gap:12px; }
-    .mm-chev{ font-size:14px; font-weight:900; background:rgba(255,255,255,0.1); width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:6px; }
-    .markmap-node circle{ opacity:0 !important; }
-    .markmap-link{ stroke:rgba(140,155,170,0.5) !important; stroke-width:3px !important; }
+    .mm-row{ display:flex; align-items:center; gap:10px; }
+    .mm-chev{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:6px; background:rgba(255,255,255,.10); color:rgba(255,255,255,.80); font-size:13px; font-weight:900; margin-left:2px; }
+    .mm-chev{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:6px; background:rgba(255,255,255,.10); color:rgba(255,255,255,.80); font-size:13px; font-weight:900; }
+    .markmap-node circle{ opacity:0.0 !important; }
   </style>
 </head>
 <body>
-  <div id="toolbar">
-    <button class="tb-btn" id="zin">+</button>
-    <button class="tb-btn" id="zout">−</button>
-    <button class="tb-btn" id="res">Resize/Fit</button>
-    <button class="tb-btn" id="cls">Close</button>
+  <div id="header">
+    <div id="title">Taxonomy: Animals, Food, and Catering</div>
+    <div id="subtitle">Click nodes to toggle expansion</div>
+    <div id="subtitle">Click nodes to toggle expansion. Dependency logic active.</div>
   </div>
-  <svg id="svg" class="markmap"></svg>
-
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
-
-  <script>
-    (function(){
-      const { Transformer, Markmap } = window.markmap;
+  <div id="toolbar">
+    <button class="tb-btn" id="plus">+</button>
+@@ -61,6 +59,8 @@
       const svg = document.getElementById('svg');
       const transformer = new Transformer();
       let mm = null;
+      let baseRoot = null;
+      let expandLevel = 2;
 
-      function decorate(){
-        mm.g.selectAll('g.markmap-node').attr('data-depth', d => d.depth);
-        mm.g.selectAll('g.markmap-node').each(function(d){
-          const div = d3.select(this).select('foreignObject > div');
-          if (div.empty() || div.select('.mm-row').size()) return;
-          const txt = d.data.content; div.html('');
-          const row = div.append('div').attr('class','mm-row');
-          row.append('span').text(txt);
-          if (d.data.children && d.data.children.length) {
-            row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
+      function decorateNodes(){
+        if (!mm || !mm.g) return;
+@@ -70,8 +70,7 @@
+          const div = g.select('foreignObject > div');
+          if (div.empty()) return;
+          if (div.select('.mm-row').empty()) {
+            const text = div.text();
+            div.html('');
+            const text = div.text(); div.html('');
+            const row = div.append('div').attr('class','mm-row');
+            row.append('span').attr('class','mm-text').text(text);
+          }
+@@ -85,27 +84,48 @@
+
+        mm.g.selectAll('g.markmap-node').on('click.vat', async (event, d) => {
+          event.preventDefault(); event.stopPropagation();
+          
+          if (d && d.children && d.children.length) {
+            // DEPENDENCY LOGIC: Level 3 children nodes check if parent is expanded
+            const isRestricted = ["Food for Human Consumption", "Catering and takeaway", "Plants and Seeds", "Services and Processes"].includes(d.data.content);
+            const parent = d.parent;
+            const parentFolded = parent && parent.payload && parent.payload.fold;
+            if (isRestricted && parentFolded) {
+              // If parent is collapsed, reset whole map to level 2
+              setExpand(2);
+              return;
+            }
+            await mm.toggleNode(d);
+            decorateNodes();
+            /* Branch focus */
+            await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
           }
         });
       }
 
-      window.addEventListener('message', (ev) => {
-        if (ev.data.type !== 'VAT_SET') return;
-        const root = transformer.transform(ev.data.markdown).root;
-        if (mm) mm.destroy();
-        
-        mm = Markmap.create(svg, {
-          autoFit: true,
-          initialExpandLevel: 1, /* Starts with Level 2 ready to click */
-          spacingVertical: 110,
-          spacingHorizontal: 140,
-          duration: 350 
-        }, root);
-        
-        decorate();
-
-        mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
-          e.stopPropagation();
-          if (d.data.children) {
-            await mm.toggleNode(d);
-            decorate();
-          }
-        });
+      function render(){
+        if (!baseRoot) return;
+        while(svg.firstChild) svg.removeChild(svg.firstChild);
+        mm = Markmap.create(svg, { autoFit: true, initialExpandLevel: expandLevel, spacingVertical: 45, spacingHorizontal: 110, paddingX: 16 }, JSON.parse(JSON.stringify(baseRoot)));
+        decorateNodes();
+      }
+      function setExpand(n){
+        expandLevel = Math.max(1, Math.min(8, n));
+        render();
+      }
+      window.addEventListener('message', (ev)=>{
+        if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
+        const out = transformer.transform(String(ev.data.markdown || ''));
+        if (!mm) {
+          mm = Markmap.create(svg, { autoFit: true, initialExpandLevel: 2, spacingVertical: 45, spacingHorizontal: 110, paddingX: 16 }, out.root);
+        } else { mm.setData(out.root); }
+        decorateNodes();
+        baseRoot = out.root;
+        setExpand(2);
       });
 
-      document.getElementById('zin').onclick = () => mm.rescale(1.2);
-      document.getElementById('zout').onclick = () => mm.rescale(0.8);
-      document.getElementById('res').onclick = () => mm.fit();
-      document.getElementById('cls').onclick = () => window.parent.postMessage({type:'VAT_CLOSE'}, '*');
-      window.parent.postMessage({type:'VAT_READY'}, '*');
-    })();
-  </script>
-</body>
-</html>
+      document.getElementById('plus').onclick = (e) => { e.stopPropagation(); mm.rescale(1.2); };
+      document.getElementById('minus').onclick = (e) => { e.stopPropagation(); mm.rescale(0.8); };
+      document.getElementById('resize').onclick = (e) => { e.stopPropagation(); mm.fit(); };
+      document.getElementById('plus').onclick = (e) => { e.stopPropagation(); setExpand(expandLevel + 1); };
+      document.getElementById('minus').onclick = (e) => { e.stopPropagation(); setExpand(expandLevel - 1); };
+      document.getElementById('resize').onclick = (e) => { e.stopPropagation(); setExpand(2); };
+      document.getElementById('close').onclick = (e) => { window.parent.postMessage({ type:'VAT_CLOSE' }, '*'); };
+      window.parent.postMessage({ type:'VAT_READY' }, '*');
