@@ -41,7 +41,7 @@
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">Click nodes to toggle expansion. Dependency logic active.</div>
+    <div id="subtitle">Click any node to expand. Use Resize to return to Level 2.</div>
   </div>
   <div id="toolbar">
     <button class="tb-btn" id="plus">+</button>
@@ -60,7 +60,6 @@
       const transformer = new Transformer();
       let mm = null;
       let baseRoot = null;
-      let expandLevel = 2;
 
       function decorateNodes(){
         if (!mm || !mm.g) return;
@@ -84,48 +83,41 @@
 
         mm.g.selectAll('g.markmap-node').on('click.vat', async (event, d) => {
           event.preventDefault(); event.stopPropagation();
-          
           if (d && d.children && d.children.length) {
-            // DEPENDENCY LOGIC: Level 3 children nodes check if parent is expanded
-            const isRestricted = ["Food for Human Consumption", "Catering and takeaway", "Plants and Seeds", "Services and Processes"].includes(d.data.content);
-            const parent = d.parent;
-            const parentFolded = parent && parent.payload && parent.payload.fold;
-
-            if (isRestricted && parentFolded) {
-              // If parent is collapsed, reset whole map to level 2
-              setExpand(2);
-              return;
-            }
-
             await mm.toggleNode(d);
             decorateNodes();
+            // Surgical focus: Locks camera on the clicked node
             await mm.centerNode(d, { top: 110, right: 110, bottom: 110, left: 110 });
           }
         });
-      }
-
-      function render(){
-        if (!baseRoot) return;
-        while(svg.firstChild) svg.removeChild(svg.firstChild);
-        mm = Markmap.create(svg, { autoFit: true, initialExpandLevel: expandLevel, spacingVertical: 45, spacingHorizontal: 110, paddingX: 16 }, JSON.parse(JSON.stringify(baseRoot)));
-        decorateNodes();
-      }
-
-      function setExpand(n){
-        expandLevel = Math.max(1, Math.min(8, n));
-        render();
       }
 
       window.addEventListener('message', (ev)=>{
         if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
         const out = transformer.transform(String(ev.data.markdown || ''));
         baseRoot = out.root;
-        setExpand(2);
+        if (!mm) {
+          mm = Markmap.create(svg, { 
+            autoFit: true, 
+            initialExpandLevel: 2, 
+            spacingVertical: 45, 
+            spacingHorizontal: 110, 
+            paddingX: 16 
+          }, baseRoot);
+        } else {
+          mm.setData(baseRoot);
+        }
+        decorateNodes();
       });
 
-      document.getElementById('plus').onclick = (e) => { e.stopPropagation(); setExpand(expandLevel + 1); };
-      document.getElementById('minus').onclick = (e) => { e.stopPropagation(); setExpand(expandLevel - 1); };
-      document.getElementById('resize').onclick = (e) => { e.stopPropagation(); setExpand(2); };
+      document.getElementById('plus').onclick = (e) => { e.stopPropagation(); mm.rescale(1.2); };
+      document.getElementById('minus').onclick = (e) => { e.stopPropagation(); mm.rescale(0.8); };
+      document.getElementById('resize').onclick = (e) => { 
+        e.stopPropagation(); 
+        // Force reset to expand level 2
+        mm.setData(baseRoot);
+        mm.fit(); 
+      };
       document.getElementById('close').onclick = (e) => { window.parent.postMessage({ type:'VAT_CLOSE' }, '*'); };
       window.parent.postMessage({ type:'VAT_READY' }, '*');
     })();
