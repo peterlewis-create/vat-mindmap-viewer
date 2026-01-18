@@ -6,19 +6,25 @@
   <title>VAT Mindmap Viewer</title>
   <style>
     :root{
-      --bg:#323437;
+      --bg:#0b0f14;
       --nodeGrey:#3f4956;
       --nodeGreen:#1f4a35;
     }
     html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:sans-serif; color:#fff; }
     #svg{ width:100vw; height:100vh; display:block; }
-    #header{ position:fixed; top:18px; left:18px; z-index:50; pointer-events:none; }
-    #title{ font-size:34px; font-weight:900; margin:0; }
     #toolbar{ position:fixed; top:18px; right:18px; z-index:60; display:flex; gap:10px; }
     .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
     
-    .markmap-foreign{ border-radius:8px !important; padding:8px 12px !important; font-size:15px !important; font-weight:800 !important; color:#fff !important; border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important; }
+    /* FIX: Prevents text from blocking the click on the expansion logic */
+    .markmap-foreign{ 
+      border-radius:8px !important; padding:8px 12px !important; 
+      font-size:15px !important; font-weight:800 !important; color:#fff !important; 
+      border:1px solid rgba(255,255,255,.1) !important; white-space:nowrap !important;
+      pointer-events: none !important; 
+    }
     
+    g.markmap-node { cursor: pointer; pointer-events: all; }
+
     g.markmap-node[data-depth="0"] .markmap-foreign,
     g.markmap-node[data-depth="1"] .markmap-foreign,
     g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
@@ -33,7 +39,6 @@
   </style>
 </head>
 <body>
-  <div id="header"><div id="title">Taxonomy: Animals, Food, and Catering</div></div>
   <div id="toolbar">
     <button class="tb-btn" id="zin">+</button>
     <button class="tb-btn" id="zout">−</button>
@@ -52,43 +57,41 @@
       const svg = document.getElementById('svg');
       const transformer = new Transformer();
       let mm = null;
-      let baseRoot = null;
 
       function decorate(){
         mm.g.selectAll('g.markmap-node').attr('data-depth', d => d.depth);
         mm.g.selectAll('g.markmap-node').each(function(d){
           const div = d3.select(this).select('foreignObject > div');
           if (div.empty() || div.select('.mm-row').size()) return;
-          const txt = div.text(); div.html('');
+          const txt = d.data.content; div.html('');
           const row = div.append('div').attr('class','mm-row');
           row.append('span').text(txt);
-          if (d.children && d.children.length) row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
+          if (d.data.children && d.data.children.length) row.append('span').attr('class','mm-chev').text(d.payload?.fold ? '>' : '<');
         });
       }
 
       window.addEventListener('message', (ev) => {
         if (ev.data.type !== 'VAT_SET') return;
-        baseRoot = transformer.transform(ev.data.markdown).root;
+        const root = transformer.transform(ev.data.markdown).root;
         if (mm) mm.destroy();
         
         mm = Markmap.create(svg, {
           autoFit: true,
           initialExpandLevel: 2,
-          /* THE FIX: Provide massive vertical room so Level 3 nodes don't collide */
-          spacingVertical: 85,
-          spacingHorizontal: 160,
-          duration: 0 
-        }, baseRoot);
+          /* INCREASED SPACING to prevent Level 3 collisions */
+          spacingVertical: 100,
+          spacingHorizontal: 150,
+          duration: 300 
+        }, root);
         
         decorate();
         
+        // RE-ATTACH CLICK LOGIC
         mm.g.selectAll('g.markmap-node').on('click.vat', async (e, d) => {
           e.stopPropagation();
-          if (d.children) {
+          if (d.data.children) {
             await mm.toggleNode(d);
             decorate();
-            /* Force camera to stay on the clicked branch */
-            await mm.centerNode(d, { top: 100, bottom: 100, left: 100, right: 100 });
           }
         });
       });
