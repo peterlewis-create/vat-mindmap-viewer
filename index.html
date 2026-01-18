@@ -6,43 +6,44 @@
   <title>VAT Mindmap Viewer</title>
   <style>
     :root{
-      --bg:#323437;
+      --bg:#323437;        /* LLM-style charcoal */
       --text:#ffffff;
       --muted:rgba(255,255,255,.75);
-      --nodeGrey:#3f4956;
-      --nodeGreen:#1f4a35;
+      --nodeGrey:#3f4956;  /* Levels 0–2 */
+      --nodeGreen:#1f4a35; /* Levels 3–5 */
       --nodeBorder:rgba(255,255,255,.10);
       --link:rgba(140,155,170,.35);
       --accent:#79a8ff;
     }
-    html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:system-ui,-apple-system,sans-serif; color:var(--text); }
-    #svg{ width:100vw; height:100vh; display:block; }
+    html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; font-family:system-ui, sans-serif; color:var(--text); }
+    #svg{ width:100vw; height:100vh; display:block; background:var(--bg); }
     #header{ position:fixed; top:18px; left:18px; z-index:50; pointer-events:none; }
-    #title{ font-size:34px; font-weight:900; margin:0; }
+    #title{ font-size:34px; font-weight:900; margin:0; line-height:1.05; }
     #subtitle{ margin-top:6px; font-size:13px; color:var(--muted); font-weight:700; }
     #toolbar{ position:fixed; top:18px; right:18px; z-index:60; display:flex; gap:10px; }
     .tb-btn{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.25); color:#fff; height:40px; min-width:40px; border-radius:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 10px; }
     .tb-btn.text{ min-width:auto; font-size:13px; }
+    .tb-btn:hover{ border-color:rgba(255,255,255,.55); }
     .markmap-link{ stroke:var(--link) !important; stroke-width:2.2px !important; }
     .markmap-foreign{ border-radius:8px !important; padding:7px 10px !important; font-size:14px !important; font-weight:800 !important; color:#fff !important; border:1px solid var(--nodeBorder) !important; white-space:nowrap !important; max-width:420px !important; overflow:visible !important; }
-    
+
     /* Depth-based colors */
     g.markmap-node[data-depth="0"] .markmap-foreign,
     g.markmap-node[data-depth="1"] .markmap-foreign,
     g.markmap-node[data-depth="2"] .markmap-foreign{ background:var(--nodeGrey) !important; }
     g.markmap-node[data-depth="3"] .markmap-foreign,
     g.markmap-node[data-depth="4"] .markmap-foreign,
-    g.markmap-node[data-depth="5"] .markmap-foreign { background:var(--nodeGreen) !important; }
+    g.markmap-node[data-depth="5"] .markmap-foreign{ background:var(--nodeGreen) !important; }
 
     .mm-row{ display:flex; align-items:center; gap:10px; }
-    .mm-chev{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:6px; background:rgba(255,255,255,.10); color:rgba(255,255,255,.80); font-size:13px; font-weight:900; }
+    .mm-chev{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:6px; background:rgba(255,255,255,.10); color:rgba(255,255,255,.80); font-size:13px; font-weight:900; margin-left:2px; }
     .markmap-node circle{ opacity:0.0 !important; }
   </style>
 </head>
 <body>
   <div id="header">
     <div id="title">Taxonomy: Animals, Food, and Catering</div>
-    <div id="subtitle">Toggle nodes to explore levels. Use Resize to center.</div>
+    <div id="subtitle">Click nodes to toggle expansion</div>
   </div>
   <div id="toolbar">
     <button class="tb-btn" id="plus">+</button>
@@ -97,13 +98,7 @@
         if (!ev || !ev.data || ev.data.type !== 'VAT_SET') return;
         const out = transformer.transform(String(ev.data.markdown || ''));
         if (!mm) {
-          mm = Markmap.create(svg, {
-            autoFit: true,
-            initialExpandLevel: 2,
-            spacingVertical: 45,
-            spacingHorizontal: 110,
-            paddingX: 16
-          }, out.root);
+          mm = Markmap.create(svg, { autoFit: true, initialExpandLevel: 2, spacingVertical: 45, spacingHorizontal: 110, paddingX: 16 }, out.root);
         } else { mm.setData(out.root); }
         decorateNodes();
       });
